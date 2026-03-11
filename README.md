@@ -11,7 +11,7 @@ Claude ←→ MCP Server (FastMCP) ←→ TCP socket ←→ QGIS Plugin (QTimer)
 ```
 
 1. **QGIS Plugin** (`qgis_mcp_plugin/`) — Runs inside QGIS. Non-blocking TCP socket server that processes JSON commands within QGIS's event loop.
-2. **MCP Server** (`src/qgis_mcp/server.py`) — Runs outside QGIS. Exposes QGIS operations as MCP tools via [FastMCP](https://github.com/jlowin/fastmcp).
+2. **MCP Server** (`src/qgis_mcp/server.py`) — Runs outside QGIS. Exposes QGIS operations as MCP tools via [FastMCP](https://gofastmcp.com/).
 
 ## Prerequisites
 
@@ -58,7 +58,7 @@ Create a `.mcp.json` file at the root of your clone:
   "mcpServers": {
     "qgis": {
       "command": "uv",
-      "args": ["run", "--no-sync", "src/qgis_mcp/server.py"],
+      "args": ["run", "src/qgis_mcp/server.py"],
       "cwd": "/path/to/qgis-mcp"
     }
   }
@@ -82,7 +82,7 @@ Go to `Claude` > `Settings` > `Developer` > `Edit Config` and add:
   "mcpServers": {
     "qgis": {
       "command": "uv",
-      "args": ["run", "--no-sync", "src/qgis_mcp/server.py"],
+      "args": ["run", "src/qgis_mcp/server.py"],
       "cwd": "/path/to/qgis-mcp"
     }
   }

@@ -152,6 +152,14 @@ uv run --no-sync pytest tests/ -v
 - **Message log capture**: Plugin connects to `QgsApplication.messageLog().messageReceived` on start, stores up to 1000 entries in a `deque`. Disconnects on stop.
 - **QGIS 3.x/4.x compat**: `qgis_mcp_plugin/compat.py` resolves deprecated enum forms at import time via try/except (e.g. `QgsMapLayer.VectorLayer` → `Qgis.LayerType.Vector`). The plugin imports constants like `LAYER_VECTOR`, `MSG_WARNING`, `AGG_COUNT` from `compat` instead of using raw enum values. When adding new enum usages, add the compat constant to `compat.py` first.
 
+## Version Management
+
+**Two version files must be kept in sync** when bumping the version:
+- `pyproject.toml` → `version = "X.Y.Z"` (MCP server / package version)
+- `qgis_mcp_plugin/metadata.txt` → `version=X.Y.Z` (QGIS plugin repository version)
+
+The QGIS plugin repository rejects uploads if the version already exists, so always bump both files together.
+
 ## Plugin Installation
 
 The `qgis_mcp_plugin/` folder must be copied or symlinked into the QGIS profile's `python/plugins/` directory. After QGIS restart, enable via Plugins menu.
