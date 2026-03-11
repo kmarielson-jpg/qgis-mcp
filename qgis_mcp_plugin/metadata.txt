@@ -25,6 +25,7 @@ tags=mcp,ai,claude,llm,automation,socket,remote
 homepage=https://github.com/nkarasiak/qgis-mcp
 tracker=https://github.com/nkarasiak/qgis-mcp/issues
 repository=https://github.com/nkarasiak/qgis-mcp
+license=MIT
 category=Plugins
 icon=icons/icon.png
 experimental=False

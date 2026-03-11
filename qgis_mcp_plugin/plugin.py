@@ -174,6 +174,8 @@ class QgisMCPServer(QObject):
                     try:
                         data = self.client.recv(65536)
                         if data:
+                            if len(self.buffer) + len(data) > 10 * 1024 * 1024:
+                                raise ValueError("Buffer exceeded 10 MB limit")
                             self.buffer += data
                             # Process complete length-prefixed messages
                             while len(self.buffer) >= 4:

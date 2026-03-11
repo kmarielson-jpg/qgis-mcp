@@ -23,14 +23,24 @@ def mock_connection():
         yield mock_client
 
 
-def _make_ctx():
-    """Create a mock Context with async methods."""
+def _make_ctx(*, elicitation="confirm"):
+    """Create a mock Context with async methods.
+
+    elicitation: "confirm" (default) — user confirms destructive ops.
+                 "unsupported" — client doesn't support elicitation (raises).
+    """
     ctx = MagicMock()
     ctx.report_progress = AsyncMock()
     ctx.info = AsyncMock()
     ctx.warning = AsyncMock()
     ctx.error = AsyncMock()
-    ctx.elicit = AsyncMock(side_effect=Exception("Elicitation not supported"))
+    if elicitation == "unsupported":
+        ctx.elicit = AsyncMock(side_effect=Exception("Elicitation not supported"))
+    else:
+        elicit_response = MagicMock()
+        elicit_response.action = "accept"
+        elicit_response.data = {"confirm": True}
+        ctx.elicit = AsyncMock(return_value=elicit_response)
     return ctx
 
 
@@ -828,14 +838,16 @@ async def test_transform_coordinates_bbox(mock_connection):
 
 
 @pytest.mark.asyncio
-async def test_remove_layer_proceeds_without_elicitation(mock_connection):
-    """When elicitation not supported (raises), tool proceeds anyway."""
+async def test_remove_layer_denied_without_elicitation(mock_connection):
+    """When elicitation not supported (raises), tool denies (fail-closed)."""
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
     from qgis_mcp.server import remove_layer
 
-    ctx = _make_ctx()
+    ctx = _make_ctx(elicitation="unsupported")
     output = await remove_layer(ctx, layer_id="test_layer")
-    assert output == {"ok": True}
+    assert output["ok"] is False
+    assert "Cancelled" in output["message"]
+    mock_connection.send_command.assert_not_called()
 
 
 @pytest.mark.asyncio

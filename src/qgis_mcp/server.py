@@ -65,7 +65,13 @@ def get_qgis_connection() -> QgisMCPClient:
             _connection_validated_at = 0.0
 
     host = os.environ.get("QGIS_MCP_HOST", "localhost")
-    port = int(os.environ.get("QGIS_MCP_PORT", "9876"))
+    port_str = os.environ.get("QGIS_MCP_PORT", "9876")
+    try:
+        port = int(port_str)
+        if not 1 <= port <= 65535:
+            raise ValueError("out of range")
+    except ValueError:
+        raise ValueError(f"QGIS_MCP_PORT must be an integer 1-65535, got: {port_str!r}")
     _qgis_connection = QgisMCPClient(host=host, port=port)
     if not _qgis_connection.connect():
         _qgis_connection = None
@@ -102,7 +108,7 @@ async def _send(command_type: str, params: dict | None = None, timeout: int = 30
 async def _confirm_destructive(ctx: Context, message: str) -> bool:
     """Ask user for confirmation before destructive operation.
 
-    Returns True if confirmed or if client doesn't support elicitation.
+    Returns False if client doesn't support elicitation (fail-closed).
     """
     try:
         response = await ctx.elicit(
@@ -120,8 +126,9 @@ async def _confirm_destructive(ctx: Context, message: str) -> bool:
         )
         return response.action == "accept" and bool(response.data.get("confirm"))
     except Exception:
-        # Client doesn't support elicitation — proceed without confirmation
-        return True
+        # Client doesn't support elicitation — deny by default (fail-closed)
+        logger.warning("Destructive operation denied: client does not support elicitation")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -627,12 +634,30 @@ async def execute_code(ctx: Context, code: str) -> dict:
 # --- Batch ---
 
 
+_BATCH_BLOCKED_COMMANDS = frozenset({
+    "execute_code",
+    "remove_layer",
+    "delete_features",
+    "set_setting",
+    "reload_plugin",
+})
+
+
 @mcp.tool(
     title="Batch Commands",
     description="Execute multiple commands in a single round-trip. Each command is "
-    '{"type": "<command_name>", "params": {...}}. Returns an array of results.',
+    '{"type": "<command_name>", "params": {...}}. Destructive commands '
+    "(execute_code, remove_layer, delete_features, set_setting, reload_plugin) "
+    "are not allowed in batch — use them individually.",
 )
 async def batch_commands(ctx: Context, commands: list[dict]) -> dict:
+    for cmd in commands:
+        cmd_type = cmd.get("type", "")
+        if cmd_type in _BATCH_BLOCKED_COMMANDS:
+            raise ValueError(
+                f"Command {cmd_type!r} is not allowed in batch — "
+                "call it individually so confirmation can be requested"
+            )
     return await _send("batch", {"commands": commands}, timeout=60)
 
 
