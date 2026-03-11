@@ -58,7 +58,7 @@ This project connects [QGIS](https://qgis.org/) to [Claude AI](https://claude.ai
            "--directory",
            "/ABSOLUTE/PATH/TO/qgis_mcp/src/qgis_mcp",
            "run",
-           "qgis_mcp_server.py"
+           "server.py"
          ]
        }
      }

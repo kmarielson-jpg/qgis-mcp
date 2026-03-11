@@ -103,3 +103,4 @@ try:
     TOOLBUTTON_ICON_ONLY = Qt.ToolButtonStyle.ToolButtonIconOnly
 except AttributeError:
     TOOLBUTTON_ICON_ONLY = Qt.ToolButtonIconOnly
+

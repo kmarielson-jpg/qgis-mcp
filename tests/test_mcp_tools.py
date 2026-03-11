@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from qgis_mcp.qgis_mcp_server import QgisMCPClient, _send_sync
+from qgis_mcp.server import QgisMCPClient, _send_sync
 
 # --- Fixtures ---
 
@@ -19,7 +19,7 @@ def mock_connection():
     mock_client = MagicMock(spec=QgisMCPClient)
     mock_client.socket = MagicMock()
     mock_client.socket.getpeername.return_value = ("localhost", 9876)
-    with patch("qgis_mcp.qgis_mcp_server.get_qgis_connection", return_value=mock_client):
+    with patch("qgis_mcp.server.get_qgis_connection", return_value=mock_client):
         yield mock_client
 
 
@@ -76,7 +76,7 @@ def test_send_empty_result(mock_connection):
 @pytest.mark.asyncio
 async def test_ping_tool_returns_dict(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"pong": True}}
-    from qgis_mcp.qgis_mcp_server import ping
+    from qgis_mcp.server import ping
 
     ctx = _make_ctx()
     output = await ping(ctx)
@@ -90,7 +90,7 @@ async def test_get_layers_passes_pagination(mock_connection):
         "status": "success",
         "result": {"layers": [], "total_count": 0, "offset": 5, "limit": 10},
     }
-    from qgis_mcp.qgis_mcp_server import get_layers
+    from qgis_mcp.server import get_layers
 
     ctx = _make_ctx()
     output = await get_layers(ctx, limit=10, offset=5)
@@ -107,7 +107,7 @@ async def test_get_layer_features_enforces_max_limit(mock_connection):
         "status": "success",
         "result": {"features": [], "feature_count": 0, "fields": []},
     }
-    from qgis_mcp.qgis_mcp_server import get_layer_features
+    from qgis_mcp.server import get_layer_features
 
     ctx = _make_ctx()
     await get_layer_features(ctx, layer_id="test", limit=100)
@@ -122,7 +122,7 @@ async def test_get_layer_features_with_expression(mock_connection):
         "status": "success",
         "result": {"features": [], "feature_count": 0, "fields": []},
     }
-    from qgis_mcp.qgis_mcp_server import get_layer_features
+    from qgis_mcp.server import get_layer_features
 
     ctx = _make_ctx()
     await get_layer_features(ctx, layer_id="test", expression="name = 'Berlin'")
@@ -136,7 +136,7 @@ async def test_get_layer_features_no_expression_omitted(mock_connection):
         "status": "success",
         "result": {"features": [], "feature_count": 0, "fields": []},
     }
-    from qgis_mcp.qgis_mcp_server import get_layer_features
+    from qgis_mcp.server import get_layer_features
 
     ctx = _make_ctx()
     await get_layer_features(ctx, layer_id="test")
@@ -153,7 +153,7 @@ async def test_batch_commands_tool(mock_connection):
             {"status": "success", "result": {"layers": [], "total_count": 0}},
         ],
     }
-    from qgis_mcp.qgis_mcp_server import batch_commands
+    from qgis_mcp.server import batch_commands
 
     ctx = _make_ctx()
     output = await batch_commands(
@@ -173,7 +173,7 @@ async def test_execute_processing_uses_long_timeout(mock_connection):
         "status": "success",
         "result": {"algorithm": "test", "result": {}},
     }
-    from qgis_mcp.qgis_mcp_server import execute_processing
+    from qgis_mcp.server import execute_processing
 
     ctx = _make_ctx()
     await execute_processing(ctx, algorithm="native:buffer", parameters={"INPUT": "layer"})
@@ -191,7 +191,7 @@ async def test_render_map_returns_image_content(mock_connection):
         "status": "success",
         "result": {"base64_data": "iVBOR==", "mime_type": "image/png", "width": 800, "height": 600},
     }
-    from qgis_mcp.qgis_mcp_server import render_map
+    from qgis_mcp.server import render_map
 
     ctx = _make_ctx()
     result = await render_map(ctx, width=800, height=600)
@@ -207,7 +207,7 @@ async def test_execute_code_tool(mock_connection):
         "status": "success",
         "result": {"stdout": "hello", "stderr": ""},
     }
-    from qgis_mcp.qgis_mcp_server import execute_code
+    from qgis_mcp.server import execute_code
 
     ctx = _make_ctx()
     result = await execute_code(ctx, code="print('hello')")
@@ -230,7 +230,7 @@ def test_client_send_command_no_socket():
 @pytest.mark.asyncio
 async def test_add_features_tool(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"added": 2}}
-    from qgis_mcp.qgis_mcp_server import add_features
+    from qgis_mcp.server import add_features
 
     ctx = _make_ctx()
     output = await add_features(
@@ -247,7 +247,7 @@ async def test_add_features_tool(mock_connection):
 @pytest.mark.asyncio
 async def test_update_features_tool(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"updated": 1}}
-    from qgis_mcp.qgis_mcp_server import update_features
+    from qgis_mcp.server import update_features
 
     ctx = _make_ctx()
     output = await update_features(
@@ -263,7 +263,7 @@ async def test_update_features_tool(mock_connection):
 @pytest.mark.asyncio
 async def test_delete_features_by_fids(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"deleted": 2}}
-    from qgis_mcp.qgis_mcp_server import delete_features
+    from qgis_mcp.server import delete_features
 
     ctx = _make_ctx()
     output = await delete_features(ctx, layer_id="test", fids=[1, 2])
@@ -275,7 +275,7 @@ async def test_delete_features_by_fids(mock_connection):
 @pytest.mark.asyncio
 async def test_delete_features_by_expression(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"deleted": 3}}
-    from qgis_mcp.qgis_mcp_server import delete_features
+    from qgis_mcp.server import delete_features
 
     ctx = _make_ctx()
     await delete_features(ctx, layer_id="test", expression="id > 5")
@@ -286,7 +286,7 @@ async def test_delete_features_by_expression(mock_connection):
 @pytest.mark.asyncio
 async def test_set_layer_style_tool(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
-    from qgis_mcp.qgis_mcp_server import set_layer_style
+    from qgis_mcp.server import set_layer_style
 
     ctx = _make_ctx()
     output = await set_layer_style(
@@ -306,7 +306,7 @@ async def test_set_layer_style_tool(mock_connection):
 @pytest.mark.asyncio
 async def test_select_features_tool(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"selected": 3}}
-    from qgis_mcp.qgis_mcp_server import select_features
+    from qgis_mcp.server import select_features
 
     ctx = _make_ctx()
     output = await select_features(ctx, layer_id="test", expression="value > 100")
@@ -319,7 +319,7 @@ async def test_get_selection_tool(mock_connection):
         "status": "success",
         "result": {"fids": [1, 2, 3], "count": 3},
     }
-    from qgis_mcp.qgis_mcp_server import get_selection
+    from qgis_mcp.server import get_selection
 
     ctx = _make_ctx()
     output = await get_selection(ctx, layer_id="test")
@@ -330,7 +330,7 @@ async def test_get_selection_tool(mock_connection):
 @pytest.mark.asyncio
 async def test_clear_selection_tool(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
-    from qgis_mcp.qgis_mcp_server import clear_selection
+    from qgis_mcp.server import clear_selection
 
     ctx = _make_ctx()
     output = await clear_selection(ctx, layer_id="test")
@@ -343,7 +343,7 @@ async def test_create_memory_layer_tool(mock_connection):
         "status": "success",
         "result": {"id": "mem_123", "name": "test_layer", "type": "vector_0", "feature_count": 0},
     }
-    from qgis_mcp.qgis_mcp_server import create_memory_layer
+    from qgis_mcp.server import create_memory_layer
 
     ctx = _make_ctx()
     output = await create_memory_layer(
@@ -364,7 +364,7 @@ async def test_list_processing_algorithms_tool(mock_connection):
             "count": 1,
         },
     }
-    from qgis_mcp.qgis_mcp_server import list_processing_algorithms
+    from qgis_mcp.server import list_processing_algorithms
 
     ctx = _make_ctx()
     output = await list_processing_algorithms(ctx, search="buffer")
@@ -385,7 +385,7 @@ async def test_get_algorithm_help_tool(mock_connection):
             "provider": "native",
         },
     }
-    from qgis_mcp.qgis_mcp_server import get_algorithm_help
+    from qgis_mcp.server import get_algorithm_help
 
     ctx = _make_ctx()
     output = await get_algorithm_help(ctx, algorithm_id="native:buffer")
@@ -398,7 +398,7 @@ async def test_find_layer_tool(mock_connection):
         "status": "success",
         "result": {"layers": [{"id": "l1", "name": "roads", "type": "vector_1"}], "count": 1},
     }
-    from qgis_mcp.qgis_mcp_server import find_layer
+    from qgis_mcp.server import find_layer
 
     ctx = _make_ctx()
     output = await find_layer(ctx, name_pattern="road*")
@@ -411,7 +411,7 @@ async def test_list_layouts_tool(mock_connection):
         "status": "success",
         "result": {"layouts": [{"name": "Map1", "page_count": 1}], "count": 1},
     }
-    from qgis_mcp.qgis_mcp_server import list_layouts
+    from qgis_mcp.server import list_layouts
 
     ctx = _make_ctx()
     output = await list_layouts(ctx)
@@ -424,7 +424,7 @@ async def test_export_layout_tool(mock_connection):
         "status": "success",
         "result": {"ok": True, "path": "/tmp/layout.pdf"},
     }
-    from qgis_mcp.qgis_mcp_server import export_layout
+    from qgis_mcp.server import export_layout
 
     ctx = _make_ctx()
     output = await export_layout(ctx, layout_name="Map1", path="/tmp/layout.pdf")
@@ -453,7 +453,7 @@ async def test_get_message_log_tool(mock_connection):
             "count": 1,
         },
     }
-    from qgis_mcp.qgis_mcp_server import get_message_log
+    from qgis_mcp.server import get_message_log
 
     ctx = _make_ctx()
     output = await get_message_log(ctx, limit=50)
@@ -469,7 +469,7 @@ async def test_get_message_log_with_filters(mock_connection):
         "status": "success",
         "result": {"messages": [], "count": 0},
     }
-    from qgis_mcp.qgis_mcp_server import get_message_log
+    from qgis_mcp.server import get_message_log
 
     ctx = _make_ctx()
     await get_message_log(ctx, level="warning", tag="MyPlugin", limit=10)
@@ -495,7 +495,7 @@ async def test_list_plugins_tool(mock_connection):
             "count": 1,
         },
     }
-    from qgis_mcp.qgis_mcp_server import list_plugins
+    from qgis_mcp.server import list_plugins
 
     ctx = _make_ctx()
     output = await list_plugins(ctx, enabled_only=True)
@@ -516,7 +516,7 @@ async def test_get_plugin_info_tool(mock_connection):
             "path": "/plugins/qgis_mcp_plugin",
         },
     }
-    from qgis_mcp.qgis_mcp_server import get_plugin_info
+    from qgis_mcp.server import get_plugin_info
 
     ctx = _make_ctx()
     output = await get_plugin_info(ctx, plugin_name="qgis_mcp_plugin")
@@ -530,7 +530,7 @@ async def test_reload_plugin_tool(mock_connection):
         "status": "success",
         "result": {"reloaded": "my_plugin", "ok": True},
     }
-    from qgis_mcp.qgis_mcp_server import reload_plugin
+    from qgis_mcp.server import reload_plugin
 
     ctx = _make_ctx()
     output = await reload_plugin(ctx, plugin_name="my_plugin")
@@ -545,7 +545,7 @@ async def test_reload_plugin_self_blocked(mock_connection):
         "status": "error",
         "message": "Cannot reload MCP plugin (would break the connection)",
     }
-    from qgis_mcp.qgis_mcp_server import reload_plugin
+    from qgis_mcp.server import reload_plugin
 
     ctx = _make_ctx()
     with pytest.raises(RuntimeError, match="Cannot reload MCP plugin"):
@@ -582,7 +582,7 @@ async def test_get_layer_tree_tool(mock_connection):
             ]
         },
     }
-    from qgis_mcp.qgis_mcp_server import get_layer_tree
+    from qgis_mcp.server import get_layer_tree
 
     ctx = _make_ctx()
     output = await get_layer_tree(ctx)
@@ -597,7 +597,7 @@ async def test_create_layer_group_tool(mock_connection):
         "status": "success",
         "result": {"name": "My Group", "ok": True},
     }
-    from qgis_mcp.qgis_mcp_server import create_layer_group
+    from qgis_mcp.server import create_layer_group
 
     ctx = _make_ctx()
     output = await create_layer_group(ctx, name="My Group")
@@ -613,7 +613,7 @@ async def test_create_layer_group_with_parent(mock_connection):
         "status": "success",
         "result": {"name": "Sub Group", "ok": True},
     }
-    from qgis_mcp.qgis_mcp_server import create_layer_group
+    from qgis_mcp.server import create_layer_group
 
     ctx = _make_ctx()
     await create_layer_group(ctx, name="Sub Group", parent="Parent Group")
@@ -624,7 +624,7 @@ async def test_create_layer_group_with_parent(mock_connection):
 @pytest.mark.asyncio
 async def test_move_layer_to_group_tool(mock_connection):
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
-    from qgis_mcp.qgis_mcp_server import move_layer_to_group
+    from qgis_mcp.server import move_layer_to_group
 
     ctx = _make_ctx()
     output = await move_layer_to_group(ctx, layer_id="layer_123", group_name="My Group")
@@ -637,7 +637,7 @@ async def test_set_layer_property_tool(mock_connection):
         "status": "success",
         "result": {"ok": True, "property": "opacity", "value": "0.5"},
     }
-    from qgis_mcp.qgis_mcp_server import set_layer_property
+    from qgis_mcp.server import set_layer_property
 
     ctx = _make_ctx()
     output = await set_layer_property(ctx, layer_id="test", property="opacity", value="0.5")
@@ -651,7 +651,7 @@ async def test_get_layer_extent_tool(mock_connection):
         "status": "success",
         "result": {"xmin": 0.0, "ymin": 0.0, "xmax": 10.0, "ymax": 10.0, "crs": "EPSG:4326"},
     }
-    from qgis_mcp.qgis_mcp_server import get_layer_extent
+    from qgis_mcp.server import get_layer_extent
 
     ctx = _make_ctx()
     output = await get_layer_extent(ctx, layer_id="test")
@@ -665,7 +665,7 @@ async def test_get_project_variables_tool(mock_connection):
         "status": "success",
         "result": {"variables": {"project_title": "Test", "custom_var": "42"}},
     }
-    from qgis_mcp.qgis_mcp_server import get_project_variables
+    from qgis_mcp.server import get_project_variables
 
     ctx = _make_ctx()
     output = await get_project_variables(ctx)
@@ -678,7 +678,7 @@ async def test_set_project_variable_tool(mock_connection):
         "status": "success",
         "result": {"ok": True, "key": "my_var", "value": "hello"},
     }
-    from qgis_mcp.qgis_mcp_server import set_project_variable
+    from qgis_mcp.server import set_project_variable
 
     ctx = _make_ctx()
     output = await set_project_variable(ctx, key="my_var", value="hello")
@@ -692,7 +692,7 @@ async def test_validate_expression_valid(mock_connection):
         "status": "success",
         "result": {"valid": True, "referenced_columns": []},
     }
-    from qgis_mcp.qgis_mcp_server import validate_expression
+    from qgis_mcp.server import validate_expression
 
     ctx = _make_ctx()
     output = await validate_expression(ctx, expression="1 + 1")
@@ -705,7 +705,7 @@ async def test_validate_expression_with_layer(mock_connection):
         "status": "success",
         "result": {"valid": True, "referenced_columns": ["name"]},
     }
-    from qgis_mcp.qgis_mcp_server import validate_expression
+    from qgis_mcp.server import validate_expression
 
     ctx = _make_ctx()
     await validate_expression(ctx, expression="\"name\" = 'Berlin'", layer_id="test_layer")
@@ -720,7 +720,7 @@ async def test_validate_expression_without_layer(mock_connection):
         "status": "success",
         "result": {"valid": True, "referenced_columns": []},
     }
-    from qgis_mcp.qgis_mcp_server import validate_expression
+    from qgis_mcp.server import validate_expression
 
     ctx = _make_ctx()
     await validate_expression(ctx, expression="1 + 1")
@@ -734,7 +734,7 @@ async def test_get_setting_tool(mock_connection):
         "status": "success",
         "result": {"key": "qgis/sketching/sketching_enabled", "value": True, "exists": True},
     }
-    from qgis_mcp.qgis_mcp_server import get_setting
+    from qgis_mcp.server import get_setting
 
     ctx = _make_ctx()
     output = await get_setting(ctx, key="qgis/sketching/sketching_enabled")
@@ -747,7 +747,7 @@ async def test_set_setting_tool(mock_connection):
         "status": "success",
         "result": {"ok": True, "key": "qgis/sketching/sketching_enabled"},
     }
-    from qgis_mcp.qgis_mcp_server import set_setting
+    from qgis_mcp.server import set_setting
 
     ctx = _make_ctx()
     output = await set_setting(ctx, key="qgis/sketching/sketching_enabled", value="true")
@@ -768,7 +768,7 @@ async def test_get_canvas_screenshot_tool(mock_connection):
             "height": 768,
         },
     }
-    from qgis_mcp.qgis_mcp_server import get_canvas_screenshot
+    from qgis_mcp.server import get_canvas_screenshot
 
     ctx = _make_ctx()
     result = await get_canvas_screenshot(ctx)
@@ -787,7 +787,7 @@ async def test_transform_coordinates_point(mock_connection):
             "point": {"x": 1113194.91, "y": 0.0},
         },
     }
-    from qgis_mcp.qgis_mcp_server import transform_coordinates
+    from qgis_mcp.server import transform_coordinates
 
     ctx = _make_ctx()
     output = await transform_coordinates(
@@ -810,7 +810,7 @@ async def test_transform_coordinates_bbox(mock_connection):
             "bbox": {"xmin": 0.0, "ymin": 0.0, "xmax": 1113194.91, "ymax": 1118889.97},
         },
     }
-    from qgis_mcp.qgis_mcp_server import transform_coordinates
+    from qgis_mcp.server import transform_coordinates
 
     ctx = _make_ctx()
     output = await transform_coordinates(
@@ -831,7 +831,7 @@ async def test_transform_coordinates_bbox(mock_connection):
 async def test_remove_layer_proceeds_without_elicitation(mock_connection):
     """When elicitation not supported (raises), tool proceeds anyway."""
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
-    from qgis_mcp.qgis_mcp_server import remove_layer
+    from qgis_mcp.server import remove_layer
 
     ctx = _make_ctx()
     output = await remove_layer(ctx, layer_id="test_layer")
@@ -841,7 +841,7 @@ async def test_remove_layer_proceeds_without_elicitation(mock_connection):
 @pytest.mark.asyncio
 async def test_remove_layer_cancelled_by_user(mock_connection):
     """When user declines elicitation, tool returns cancelled."""
-    from qgis_mcp.qgis_mcp_server import remove_layer
+    from qgis_mcp.server import remove_layer
 
     ctx = _make_ctx()
     elicit_response = MagicMock()
@@ -857,7 +857,7 @@ async def test_remove_layer_cancelled_by_user(mock_connection):
 async def test_remove_layer_confirmed_by_user(mock_connection):
     """When user confirms elicitation, tool proceeds."""
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
-    from qgis_mcp.qgis_mcp_server import remove_layer
+    from qgis_mcp.server import remove_layer
 
     ctx = _make_ctx()
     elicit_response = MagicMock()
@@ -875,14 +875,14 @@ def test_env_var_host_port():
     """Test that get_qgis_connection uses QGIS_MCP_HOST/PORT env vars."""
     with (
         patch.dict(os.environ, {"QGIS_MCP_HOST": "192.168.1.100", "QGIS_MCP_PORT": "9999"}),
-        patch("qgis_mcp.qgis_mcp_server.QgisMCPClient") as mock_client_cls,
+        patch("qgis_mcp.server.QgisMCPClient") as mock_client_cls,
     ):
         mock_instance = MagicMock()
         mock_instance.connect.return_value = True
         mock_instance.socket = MagicMock()
         mock_client_cls.return_value = mock_instance
 
-        import qgis_mcp.qgis_mcp_server as srv
+        import qgis_mcp.server as srv
 
         srv._qgis_connection = None
         try:
@@ -896,7 +896,7 @@ def test_env_var_host_port():
 async def test_load_project_logs_info(mock_connection):
     """Test that load_project sends ctx.info() message."""
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
-    from qgis_mcp.qgis_mcp_server import load_project
+    from qgis_mcp.server import load_project
 
     ctx = _make_ctx()
     await load_project(ctx, path="/tmp/test.qgz")

@@ -41,7 +41,7 @@ import time
 # Add project src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from qgis_mcp.qgis_socket_client import QgisMCPClient
+from qgis_mcp.client import QgisMCPClient
 
 # ---------------------------------------------------------------------------
 # Payload generators

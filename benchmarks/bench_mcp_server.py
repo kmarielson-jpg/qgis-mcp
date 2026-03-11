@@ -214,7 +214,7 @@ def bench_getpeername_syscall() -> list[BenchResult]:
 
 def bench_get_qgis_connection() -> list[BenchResult]:
     """Measure get_qgis_connection() with cached connection (happy path)."""
-    import qgis_mcp.qgis_mcp_server as srv
+    import qgis_mcp.server as srv
 
     mock_client = MagicMock()
     mock_client.socket = MagicMock()
@@ -256,7 +256,7 @@ def bench_get_qgis_connection() -> list[BenchResult]:
 
 def bench_send_helper() -> list[BenchResult]:
     """Measure _send_sync() overhead with mocked socket."""
-    import qgis_mcp.qgis_mcp_server as srv
+    import qgis_mcp.server as srv
 
     mock_client = MagicMock()
     mock_client.socket = MagicMock()
@@ -268,7 +268,7 @@ def bench_send_helper() -> list[BenchResult]:
 
     results = []
 
-    with patch("qgis_mcp.qgis_mcp_server.get_qgis_connection", return_value=mock_client):
+    with patch("qgis_mcp.server.get_qgis_connection", return_value=mock_client):
         results.append(
             bench(
                 "_send_sync: ping (small response)",
@@ -293,7 +293,7 @@ def bench_send_helper() -> list[BenchResult]:
 
 async def bench_tool_invocation() -> list[BenchResult]:
     """Measure full tool invocation overhead (async tool -> _send -> mock socket)."""
-    from qgis_mcp.qgis_mcp_server import get_layer_features, get_layers, ping
+    from qgis_mcp.server import get_layer_features, get_layers, ping
 
     mock_client = MagicMock()
     mock_client.socket = MagicMock()
@@ -302,7 +302,7 @@ async def bench_tool_invocation() -> list[BenchResult]:
     results = []
     ctx = _make_ctx()
 
-    with patch("qgis_mcp.qgis_mcp_server.get_qgis_connection", return_value=mock_client):
+    with patch("qgis_mcp.server.get_qgis_connection", return_value=mock_client):
         # ping — simplest tool
         mock_client.send_command.return_value = {"status": "success", "result": {"pong": True}}
         results.append(
@@ -341,7 +341,7 @@ async def bench_tool_invocation() -> list[BenchResult]:
 
 async def bench_completion_handler() -> list[BenchResult]:
     """Measure handle_completion() overhead."""
-    import qgis_mcp.qgis_mcp_server as srv
+    import qgis_mcp.server as srv
 
     mock_client = MagicMock()
     mock_client.socket = MagicMock()
@@ -356,7 +356,7 @@ async def bench_completion_handler() -> list[BenchResult]:
 
     results = []
 
-    with patch("qgis_mcp.qgis_mcp_server.get_qgis_connection", return_value=mock_client):
+    with patch("qgis_mcp.server.get_qgis_connection", return_value=mock_client):
         ref = MagicMock()
         arg = MagicMock()
         arg.name = "layer_id"
