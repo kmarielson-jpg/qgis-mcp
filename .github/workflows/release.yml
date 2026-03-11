@@ -15,9 +15,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build plugin ZIP
-        run: zip -r qgis_mcp_plugin.zip qgis_mcp_plugin/ -x "qgis_mcp_plugin/__pycache__/*"
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ASSET_NAME="qgis_mcp_plugin_v${VERSION//./-}.zip"
+          zip -r "$ASSET_NAME" qgis_mcp_plugin/ -x "qgis_mcp_plugin/__pycache__/*"
+          echo "ASSET_NAME=$ASSET_NAME" >> "$GITHUB_ENV"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: qgis_mcp_plugin.zip
+          files: ${{ env.ASSET_NAME }}
