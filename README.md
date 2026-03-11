@@ -49,15 +49,47 @@ Restart QGIS, then enable the plugin: `Plugins` > `Manage and Install Plugins` >
 
 ### 3. Connect your MCP client
 
-#### Claude Code (CLI) — one-liner
+#### Claude Code — project-level config (recommended)
+
+Create a `.mcp.json` file at the root of your clone:
+
+```json
+{
+  "mcpServers": {
+    "qgis": {
+      "command": "uv",
+      "args": ["run", "--no-sync", "src/qgis_mcp/server.py"],
+      "cwd": "/path/to/qgis-mcp"
+    }
+  }
+}
+```
+
+Claude Code automatically detects `.mcp.json` when you open the project — no manual `claude mcp add` needed.
+
+#### Claude Code — one-liner (remote install)
 
 ```bash
 claude mcp add --transport stdio qgis-mcp -- uvx --from git+https://github.com/nkarasiak/qgis-mcp qgis-mcp-server
 ```
 
-#### Claude Desktop — manual config
+#### Claude Desktop
 
 Go to `Claude` > `Settings` > `Developer` > `Edit Config` and add:
+
+```json
+{
+  "mcpServers": {
+    "qgis": {
+      "command": "uv",
+      "args": ["run", "--no-sync", "src/qgis_mcp/server.py"],
+      "cwd": "/path/to/qgis-mcp"
+    }
+  }
+}
+```
+
+Or for a remote install without cloning:
 
 ```json
 {
@@ -76,12 +108,6 @@ Go to `Claude` > `Settings` > `Developer` > `Edit Config` and add:
 #### Cursor / other MCP clients
 
 Use the same JSON configuration above in your client's MCP settings file.
-
-#### From a local clone (for development)
-
-```bash
-claude mcp add --transport stdio qgis-mcp -- uv run --directory /path/to/qgis-mcp --no-sync src/qgis_mcp/server.py
-```
 
 ## Usage
 
