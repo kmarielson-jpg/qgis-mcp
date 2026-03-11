@@ -16,9 +16,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.prompts.base import UserMessage
 from mcp.types import (
+    Annotations,
     Completion,
     CompletionArgument,
     ImageContent,
+    ResourceLink,
     TextContent,
     ToolAnnotations,
 )
@@ -176,8 +178,9 @@ mcp = FastMCP(
     title="Ping",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Check connectivity to the QGIS plugin server. Returns pong if connected.",
+    structured_output=True,
 )
-async def ping(ctx: Context) -> dict:
+async def ping(ctx: Context) -> dict[str, Any]:
     return await _send("ping")
 
 
@@ -185,8 +188,9 @@ async def ping(ctx: Context) -> dict:
     title="Get QGIS Info",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get QGIS version, profile path, and plugin count.",
+    structured_output=True,
 )
-async def get_qgis_info(ctx: Context) -> dict:
+async def get_qgis_info(ctx: Context) -> dict[str, Any]:
     return await _send("get_qgis_info")
 
 
@@ -194,8 +198,9 @@ async def get_qgis_info(ctx: Context) -> dict:
     title="Get Project Info",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get current project metadata: filename, title, CRS, layer count, and summary of layers.",
+    structured_output=True,
 )
-async def get_project_info(ctx: Context) -> dict:
+async def get_project_info(ctx: Context) -> dict[str, Any]:
     return await _send("get_project_info")
 
 
@@ -203,17 +208,33 @@ async def get_project_info(ctx: Context) -> dict:
 
 
 @mcp.tool(title="Load Project", description="Load a QGIS project from a .qgs/.qgz file path.")
-async def load_project(ctx: Context, path: str) -> dict:
+async def load_project(ctx: Context, path: str) -> list:
     await ctx.info(f"Loading project: {path}")
-    return await _send("load_project", {"path": path})
+    result = await _send("load_project", {"path": path})
+    return [
+        TextContent(type="text", text=json.dumps(result)),
+        ResourceLink(
+            type="resource_link",
+            uri="qgis://project",
+            name="Project Info",
+        ),
+    ]
 
 
 @mcp.tool(
     title="Create New Project",
     description="Create a new empty QGIS project and save it to the given path.",
 )
-async def create_new_project(ctx: Context, path: str) -> dict:
-    return await _send("create_new_project", {"path": path})
+async def create_new_project(ctx: Context, path: str) -> list:
+    result = await _send("create_new_project", {"path": path})
+    return [
+        TextContent(type="text", text=json.dumps(result)),
+        ResourceLink(
+            type="resource_link",
+            uri="qgis://project",
+            name="Project Info",
+        ),
+    ]
 
 
 @mcp.tool(
@@ -236,8 +257,9 @@ async def save_project(ctx: Context, path: str | None = None) -> dict:
     annotations=ToolAnnotations(readOnlyHint=True),
     description="List layers in the current project with IDs, names, types, visibility, and type-specific info. "
     "Use limit/offset for pagination. Response includes total_count.",
+    structured_output=True,
 )
-async def get_layers(ctx: Context, limit: int = 50, offset: int = 0) -> dict:
+async def get_layers(ctx: Context, limit: int = 50, offset: int = 0) -> dict[str, Any]:
     return await _send("get_layers", {"limit": limit, "offset": offset})
 
 
@@ -247,11 +269,20 @@ async def get_layers(ctx: Context, limit: int = 50, offset: int = 0) -> dict:
 )
 async def add_vector_layer(
     ctx: Context, path: str, provider: str = "ogr", name: str | None = None
-) -> dict:
+) -> list:
     params = {"path": path, "provider": provider}
     if name:
         params["name"] = name
-    return await _send("add_vector_layer", params)
+    result = await _send("add_vector_layer", params)
+    layer_id = result.get("layer_id", result.get("id", ""))
+    return [
+        TextContent(type="text", text=json.dumps(result)),
+        ResourceLink(
+            type="resource_link",
+            uri=f"qgis://layers/{layer_id}/info",
+            name=result.get("name", "Layer"),
+        ),
+    ]
 
 
 @mcp.tool(
@@ -259,11 +290,20 @@ async def add_vector_layer(
 )
 async def add_raster_layer(
     ctx: Context, path: str, provider: str = "gdal", name: str | None = None
-) -> dict:
+) -> list:
     params = {"path": path, "provider": provider}
     if name:
         params["name"] = name
-    return await _send("add_raster_layer", params)
+    result = await _send("add_raster_layer", params)
+    layer_id = result.get("layer_id", result.get("id", ""))
+    return [
+        TextContent(type="text", text=json.dumps(result)),
+        ResourceLink(
+            type="resource_link",
+            uri=f"qgis://layers/{layer_id}/info",
+            name=result.get("name", "Layer"),
+        ),
+    ]
 
 
 @mcp.tool(
@@ -282,8 +322,9 @@ async def remove_layer(ctx: Context, layer_id: str) -> dict:
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Find layers by name pattern. Supports fnmatch wildcards (e.g. 'roads*') "
     "and substring matching.",
+    structured_output=True,
 )
-async def find_layer(ctx: Context, name_pattern: str) -> dict:
+async def find_layer(ctx: Context, name_pattern: str) -> dict[str, Any]:
     return await _send("find_layer", {"name_pattern": name_pattern})
 
 
@@ -299,11 +340,20 @@ async def create_memory_layer(
     geometry_type: str,
     crs: str = "EPSG:4326",
     fields: list[dict] | None = None,
-) -> dict:
+) -> list:
     params = {"name": name, "geometry_type": geometry_type, "crs": crs}
     if fields:
         params["fields"] = fields
-    return await _send("create_memory_layer", params)
+    result = await _send("create_memory_layer", params)
+    layer_id = result.get("layer_id", result.get("id", ""))
+    return [
+        TextContent(type="text", text=json.dumps(result)),
+        ResourceLink(
+            type="resource_link",
+            uri=f"qgis://layers/{layer_id}/info",
+            name=result.get("name", name),
+        ),
+    ]
 
 
 # --- Layer Visibility & Navigation ---
@@ -337,6 +387,7 @@ async def zoom_to_layer(ctx: Context, layer_id: str) -> dict:
     "at top level. Supports expression filtering (QGIS expressions like "
     '"name = \'Berlin\'" or "population > 1000000"), limit (max 50, default 10), offset for paging, '
     "and optional geometry inclusion (in _geometry key).",
+    structured_output=True,
 )
 async def get_layer_features(
     ctx: Context,
@@ -345,7 +396,7 @@ async def get_layer_features(
     offset: int = 0,
     expression: str | None = None,
     include_geometry: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     if limit > 50:
         limit = 50
     params = {
@@ -364,8 +415,9 @@ async def get_layer_features(
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Compute aggregate statistics (count, sum, mean, min, max, stdev) for a numeric field. "
     "For non-numeric fields returns count and distinct values.",
+    structured_output=True,
 )
-async def get_field_statistics(ctx: Context, layer_id: str, field_name: str) -> dict:
+async def get_field_statistics(ctx: Context, layer_id: str, field_name: str) -> dict[str, Any]:
     return await _send("get_field_statistics", {"layer_id": layer_id, "field_name": field_name})
 
 
@@ -441,8 +493,9 @@ async def select_features(
     title="Get Selection",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get the current selection for a layer. Returns feature IDs and count.",
+    structured_output=True,
 )
-async def get_selection(ctx: Context, layer_id: str) -> dict:
+async def get_selection(ctx: Context, layer_id: str) -> dict[str, Any]:
     return await _send("get_selection", {"layer_id": layer_id})
 
 
@@ -491,8 +544,9 @@ async def set_layer_style(
     title="Get Canvas Extent",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get the current map canvas extent and CRS.",
+    structured_output=True,
 )
-async def get_canvas_extent(ctx: Context) -> dict:
+async def get_canvas_extent(ctx: Context) -> dict[str, Any]:
     return await _send("get_canvas_extent")
 
 
@@ -518,7 +572,14 @@ async def set_canvas_extent(
 )
 async def get_canvas_screenshot(ctx: Context) -> list:
     result = await _send("get_canvas_screenshot")
-    return [ImageContent(type="image", data=result["base64_data"], mimeType="image/png")]
+    return [
+        ImageContent(
+            type="image",
+            data=result["base64_data"],
+            mimeType="image/png",
+            annotations=Annotations(audience=["user", "assistant"], priority=1.0),
+        )
+    ]
 
 
 # --- Raster ---
@@ -528,8 +589,9 @@ async def get_canvas_screenshot(ctx: Context) -> list:
     title="Get Raster Info",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get raster layer info: band count, dimensions, CRS, extent, per-band statistics, nodata values.",
+    structured_output=True,
 )
-async def get_raster_info(ctx: Context, layer_id: str) -> dict:
+async def get_raster_info(ctx: Context, layer_id: str) -> dict[str, Any]:
     return await _send("get_raster_info", {"layer_id": layer_id})
 
 
@@ -556,12 +618,13 @@ async def execute_processing(ctx: Context, algorithm: str, parameters: dict) -> 
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Search for processing algorithms by keyword and/or provider. "
     "Returns id, name, provider for each match.",
+    structured_output=True,
 )
 async def list_processing_algorithms(
     ctx: Context,
     search: str | None = None,
     provider: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     params = {}
     if search:
         params["search"] = search
@@ -575,8 +638,9 @@ async def list_processing_algorithms(
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get detailed help for a processing algorithm: parameters (name, type, optional, default), "
     "outputs, and description.",
+    structured_output=True,
 )
-async def get_algorithm_help(ctx: Context, algorithm_id: str) -> dict:
+async def get_algorithm_help(ctx: Context, algorithm_id: str) -> dict[str, Any]:
     return await _send("get_algorithm_help", {"algorithm_id": algorithm_id})
 
 
@@ -600,11 +664,20 @@ async def render_map(
     result = await _send("render_map_base64", params, timeout=60)
     await ctx.report_progress(100, 100)
 
-    content = [ImageContent(type="image", data=result["base64_data"], mimeType="image/png")]
+    content = [
+        ImageContent(
+            type="image",
+            data=result["base64_data"],
+            mimeType="image/png",
+            annotations=Annotations(audience=["user", "assistant"], priority=1.0),
+        )
+    ]
     if path:
         content.append(
             TextContent(
-                type="text", text=json.dumps({"saved": path, "width": width, "height": height})
+                type="text",
+                text=json.dumps({"saved": path, "width": width, "height": height}),
+                annotations=Annotations(audience=["assistant"], priority=0.5),
             )
         )
     return content
@@ -668,8 +741,9 @@ async def batch_commands(ctx: Context, commands: list[dict]) -> dict:
     title="List Layouts",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="List all print layouts in the current project with names and page counts.",
+    structured_output=True,
 )
-async def list_layouts(ctx: Context) -> dict:
+async def list_layouts(ctx: Context) -> dict[str, Any]:
     return await _send("list_layouts")
 
 
@@ -705,10 +779,11 @@ async def export_layout(
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get QGIS message log entries. Filter by level ('info', 'warning', 'critical') "
     "and/or tag (e.g. 'QGIS MCP'). Returns newest first.",
+    structured_output=True,
 )
 async def get_message_log(
     ctx: Context, level: str | None = None, tag: str | None = None, limit: int = 100
-) -> dict:
+) -> dict[str, Any]:
     params = {"limit": limit}
     if level:
         params["level"] = level
@@ -725,8 +800,9 @@ async def get_message_log(
     annotations=ToolAnnotations(readOnlyHint=True),
     description="List installed QGIS plugins with name, enabled status, and version. "
     "Set enabled_only=true to list only active plugins.",
+    structured_output=True,
 )
-async def list_plugins(ctx: Context, enabled_only: bool = False) -> dict:
+async def list_plugins(ctx: Context, enabled_only: bool = False) -> dict[str, Any]:
     return await _send("list_plugins", {"enabled_only": enabled_only})
 
 
@@ -734,8 +810,9 @@ async def list_plugins(ctx: Context, enabled_only: bool = False) -> dict:
     title="Get Plugin Info",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get detailed info for a specific plugin: name, enabled, version, description, author, path.",
+    structured_output=True,
 )
-async def get_plugin_info(ctx: Context, plugin_name: str) -> dict:
+async def get_plugin_info(ctx: Context, plugin_name: str) -> dict[str, Any]:
     return await _send("get_plugin_info", {"plugin_name": plugin_name})
 
 
@@ -758,8 +835,9 @@ async def reload_plugin(ctx: Context, plugin_name: str) -> dict:
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get the full layer tree structure with groups and layers. "
     "Returns recursive tree with type, name, visibility, and children.",
+    structured_output=True,
 )
-async def get_layer_tree(ctx: Context) -> dict:
+async def get_layer_tree(ctx: Context) -> dict[str, Any]:
     return await _send("get_layer_tree")
 
 
@@ -799,8 +877,9 @@ async def set_layer_property(ctx: Context, layer_id: str, property: str, value: 
     title="Get Layer Extent",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get the spatial extent (bounding box) and CRS of a layer.",
+    structured_output=True,
 )
-async def get_layer_extent(ctx: Context, layer_id: str) -> dict:
+async def get_layer_extent(ctx: Context, layer_id: str) -> dict[str, Any]:
     return await _send("get_layer_extent", {"layer_id": layer_id})
 
 
@@ -811,8 +890,9 @@ async def get_layer_extent(ctx: Context, layer_id: str) -> dict:
     title="Get Project Variables",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Get all project-level variables (key-value pairs set in Project Properties).",
+    structured_output=True,
 )
-async def get_project_variables(ctx: Context) -> dict:
+async def get_project_variables(ctx: Context) -> dict[str, Any]:
     return await _send("get_project_variables")
 
 
@@ -833,8 +913,9 @@ async def set_project_variable(ctx: Context, key: str, value: str) -> dict:
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Validate a QGIS expression. Returns whether it's valid, any parse errors, "
     "and referenced column names. Optionally test against a layer's fields.",
+    structured_output=True,
 )
-async def validate_expression(ctx: Context, expression: str, layer_id: str | None = None) -> dict:
+async def validate_expression(ctx: Context, expression: str, layer_id: str | None = None) -> dict[str, Any]:
     params = {"expression": expression}
     if layer_id:
         params["layer_id"] = layer_id
@@ -848,8 +929,9 @@ async def validate_expression(ctx: Context, expression: str, layer_id: str | Non
     title="Get Setting",
     annotations=ToolAnnotations(readOnlyHint=True),
     description="Read a QGIS setting by key path (e.g. 'qgis/sketching/sketching_enabled').",
+    structured_output=True,
 )
-async def get_setting(ctx: Context, key: str) -> dict:
+async def get_setting(ctx: Context, key: str) -> dict[str, Any]:
     return await _send("get_setting", {"key": key})
 
 
@@ -875,6 +957,7 @@ async def set_setting(ctx: Context, key: str, value: str) -> dict:
     description="Transform coordinates between CRS. Accepts a single point {x, y}, "
     "a list of points [{x, y}, ...], or a bbox {xmin, ymin, xmax, ymax}. "
     "Returns transformed coordinates in the same format.",
+    structured_output=True,
 )
 async def transform_coordinates(
     ctx: Context,
@@ -883,7 +966,7 @@ async def transform_coordinates(
     point: dict | None = None,
     points: list[dict] | None = None,
     bbox: dict | None = None,
-) -> dict:
+) -> dict[str, Any]:
     params = {"source_crs": source_crs, "target_crs": target_crs}
     if point:
         params["point"] = point

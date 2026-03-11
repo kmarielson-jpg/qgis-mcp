@@ -359,7 +359,11 @@ async def test_create_memory_layer_tool(mock_connection):
     output = await create_memory_layer(
         ctx, name="test_layer", geometry_type="Point", fields=[{"name": "id", "type": "integer"}]
     )
-    assert output["id"] == "mem_123"
+    assert isinstance(output, list)
+    assert output[0].type == "text"
+    assert '"mem_123"' in output[0].text
+    assert output[1].type == "resource_link"
+    assert "mem_123" in str(output[1].uri)
     call_params = mock_connection.send_command.call_args[0][1]
     assert call_params["geometry_type"] == "Point"
     assert call_params["fields"] == [{"name": "id", "type": "integer"}]
@@ -906,10 +910,67 @@ def test_env_var_host_port():
 
 @pytest.mark.asyncio
 async def test_load_project_logs_info(mock_connection):
-    """Test that load_project sends ctx.info() message."""
+    """Test that load_project sends ctx.info() and returns ResourceLink."""
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
     from qgis_mcp.server import load_project
 
     ctx = _make_ctx()
-    await load_project(ctx, path="/tmp/test.qgz")
+    output = await load_project(ctx, path="/tmp/test.qgz")
     ctx.info.assert_awaited_once_with("Loading project: /tmp/test.qgz")
+    assert isinstance(output, list)
+    assert output[0].type == "text"
+    assert output[1].type == "resource_link"
+    assert "qgis://project" in str(output[1].uri)
+
+
+# --- Resource link tests for mutating tools ---
+
+
+@pytest.mark.asyncio
+async def test_add_vector_layer_returns_resource_link(mock_connection):
+    mock_connection.send_command.return_value = {
+        "status": "success",
+        "result": {"layer_id": "vec_123", "name": "roads", "type": "vector"},
+    }
+    from qgis_mcp.server import add_vector_layer
+
+    ctx = _make_ctx()
+    output = await add_vector_layer(ctx, path="/tmp/roads.shp")
+    assert isinstance(output, list)
+    assert output[0].type == "text"
+    assert '"vec_123"' in output[0].text
+    assert output[1].type == "resource_link"
+    assert "vec_123" in str(output[1].uri)
+
+
+@pytest.mark.asyncio
+async def test_add_raster_layer_returns_resource_link(mock_connection):
+    mock_connection.send_command.return_value = {
+        "status": "success",
+        "result": {"layer_id": "ras_456", "name": "dem", "type": "raster"},
+    }
+    from qgis_mcp.server import add_raster_layer
+
+    ctx = _make_ctx()
+    output = await add_raster_layer(ctx, path="/tmp/dem.tif")
+    assert isinstance(output, list)
+    assert output[0].type == "text"
+    assert '"ras_456"' in output[0].text
+    assert output[1].type == "resource_link"
+    assert "ras_456" in str(output[1].uri)
+
+
+@pytest.mark.asyncio
+async def test_create_new_project_returns_resource_link(mock_connection):
+    mock_connection.send_command.return_value = {
+        "status": "success",
+        "result": {"ok": True, "path": "/tmp/new.qgz"},
+    }
+    from qgis_mcp.server import create_new_project
+
+    ctx = _make_ctx()
+    output = await create_new_project(ctx, path="/tmp/new.qgz")
+    assert isinstance(output, list)
+    assert output[0].type == "text"
+    assert output[1].type == "resource_link"
+    assert "qgis://project" in str(output[1].uri)
