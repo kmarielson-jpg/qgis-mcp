@@ -1,0 +1,29 @@
+[project]
+name = "qgis-mcp"
+version = "0.1.0"
+description = "QGIS integration through the Model Context Protocol"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.20.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.23"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",    # line too long — handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]           # assert is fine in tests
+"benchmarks/*" = ["T201", "B023"]  # print is fine; loop-var closures are called within same iteration
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
