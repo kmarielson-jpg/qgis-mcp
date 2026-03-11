@@ -184,8 +184,8 @@ class QgisMCPServer(QObject):
                                     raise ValueError(f"Message too large: {msg_len} bytes")
                                 if len(self.buffer) < 4 + msg_len:
                                     break  # Incomplete message
-                                msg_bytes = self.buffer[4 : 4 + msg_len]
-                                self.buffer = self.buffer[4 + msg_len :]
+                                msg_bytes = self.buffer[4:4 + msg_len]
+                                self.buffer = self.buffer[4 + msg_len:]
                                 command = json.loads(msg_bytes.decode("utf-8"))
                                 response = self.execute_command(command)
                                 self._send_response(response)
@@ -328,8 +328,8 @@ class QgisMCPServer(QObject):
                 "id": layer.id(),
                 "name": layer.name(),
                 "type": self._get_layer_type(layer),
-                "visible": layer.isValid()
-                and project.layerTreeRoot().findLayer(layer.id()).isVisible(),
+                "visible": (layer.isValid()
+                            and project.layerTreeRoot().findLayer(layer.id()).isVisible()),
             }
             info["layers"].append(layer_info)
 
@@ -449,7 +449,7 @@ class QgisMCPServer(QObject):
         project = QgsProject.instance()
         all_layers = list(project.mapLayers().items())
         total_count = len(all_layers)
-        page = all_layers[offset : offset + limit]
+        page = all_layers[offset:offset + limit]
 
         layers = []
         for layer_id, layer in page:
@@ -1053,10 +1053,8 @@ class QgisMCPServer(QObject):
                 continue
             if search:
                 search_lower = search.lower()
-                if (
-                    search_lower not in alg.id().lower()
-                    and search_lower not in alg.displayName().lower()
-                ):
+                if (search_lower not in alg.id().lower() and
+                        search_lower not in alg.displayName().lower()):
                     continue
             algorithms.append(
                 {
