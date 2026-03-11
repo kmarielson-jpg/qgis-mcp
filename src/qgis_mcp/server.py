@@ -110,7 +110,9 @@ async def _send(command_type: str, params: dict | None = None, timeout: int = 30
 async def _confirm_destructive(ctx: Context, message: str) -> bool:
     """Ask user for confirmation before destructive operation.
 
-    Returns False if client doesn't support elicitation (fail-closed).
+    Returns True if client doesn't support elicitation (fail-open), since
+    the tool is already marked destructive via ToolAnnotations and the client
+    can gate execution at the tool-call level.
     """
     try:
         response = await ctx.elicit(
@@ -128,9 +130,10 @@ async def _confirm_destructive(ctx: Context, message: str) -> bool:
         )
         return response.action == "accept" and bool(response.data.get("confirm"))
     except Exception:
-        # Client doesn't support elicitation — deny by default (fail-closed)
-        logger.warning("Destructive operation denied: client does not support elicitation")
-        return False
+        # Client doesn't support elicitation — proceed (fail-open).
+        # The destructive ToolAnnotations hint lets clients gate at call time.
+        logger.info("Elicitation not supported by client, proceeding with operation")
+        return True
 
 
 # ---------------------------------------------------------------------------
