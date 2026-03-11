@@ -1090,9 +1090,13 @@ def style_map_prompt(layer_id: str, field: str) -> list[UserMessage]:
 # Entry point
 # ===========================================================================
 
-if __name__ == "__main__":
+def main():
     transport = os.environ.get("QGIS_MCP_TRANSPORT", "stdio")
     if transport == "streamable-http":
         mcp.run(transport="streamable-http")
     else:
         mcp.run()
+
+
+if __name__ == "__main__":
+    main()

@@ -7,6 +7,10 @@ about=Socket server plugin that exposes QGIS operations to LLMs through the
     Model Context Protocol. Enables Claude to directly control QGIS: manage
     layers, edit features, run processing algorithms, render maps, and more.
 
+    This plugin is only one half of the setup. You also need an MCP server
+    so that Claude (or another LLM) can talk to QGIS.
+    See https://github.com/nkarasiak/qgis-mcp for installation instructions.
+
     Features:
     - 50 MCP tools for layers, features, processing, rendering, layouts
     - Plugin development tools: message log, plugin reload, layer tree
@@ -16,28 +20,25 @@ about=Socket server plugin that exposes QGIS operations to LLMs through the
 
     Based on the BlenderMCP project.
 version=0.1.0
-author=QGIS MCP Contributors
-email=noreply@example.com
+author=Nicolas Karasiak
+email=nicart@gmail.com
 tags=mcp,ai,claude,llm,automation,socket,remote
-homepage=https://github.com/jjsantos01/qgis_mcp
-tracker=https://github.com/jjsantos01/qgis_mcp/issues
-repository=https://github.com/jjsantos01/qgis_mcp
+homepage=https://github.com/nkarasiak/qgis-mcp
+tracker=https://github.com/nkarasiak/qgis-mcp/issues
+repository=https://github.com/nkarasiak/qgis-mcp
 category=Plugins
 icon=icons/icon.png
-experimental=True
+experimental=False
 deprecated=False
-changelog=0.1.0 : Initial release
-    - 50 async MCP tools with human-readable titles and tool annotations
+changelog=0.1.0 : Initial release (50 commands)
     - Layer management: add/remove vector and raster layers, memory layers, visibility, zoom
     - Feature operations: get/add/update/delete features, selection, field statistics
     - Processing: execute algorithms, list/search algorithms, algorithm help
-    - Rendering: map render to inline image, fast canvas screenshot, layout export
+    - Rendering: map render to base64 image, fast canvas screenshot, layout export
     - Styling: single, categorized, and graduated symbology
-    - Plugin development: message log, plugin management, layer tree operations
+    - Plugin tools: message log capture, plugin management, layer tree operations
     - System: project variables, expression validation, settings, coordinate transforms
-    - MCP logging for long-running operations, elicitation for destructive actions
-    - Layer ID auto-completion, batch commands, code execution
-    - Configurable host/port/transport via environment variables
-    - Streamable HTTP transport for remote/multi-client scenarios
+    - Batch commands, arbitrary code execution
+    - Non-blocking TCP socket server with length-prefixed framing
+    - Configurable port via toolbar dropdown
     - QGIS 3.x/4.x enum compatibility layer
-    - 7 resources, 3 prompts, llms.txt context

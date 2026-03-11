@@ -44,14 +44,17 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QBuffer, QByteArray, QObject, QSize, QTimer, QVariant
-from qgis.PyQt.QtGui import QColor, QIcon
+from qgis.PyQt.QtCore import QBuffer, QByteArray, QObject, QSize, QTimer, QUrl, QVariant
+from qgis.PyQt.QtGui import QColor, QDesktopServices, QIcon
 from qgis.PyQt.QtWidgets import (
     QAction,
+    QDialog,
     QHBoxLayout,
+    QLabel,
     QMenu,
     QSpinBox,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
@@ -1429,10 +1432,13 @@ class QgisMCPServer(QObject):
 class QgisMCPPlugin:
     """Main plugin class for QGIS MCP"""
 
+    REPO_URL = "https://github.com/nkarasiak/qgis-mcp"
+
     def __init__(self, iface):
         self.iface = iface
         self.server = None
         self.action = None
+        self.help_action = None
         self.tool_button = None
         self._toolbar_action = None  # the action wrapping the tool button
 
@@ -1476,12 +1482,72 @@ class QgisMCPPlugin:
         self.tool_button.setToolButtonStyle(TOOLBUTTON_ICON_ONLY)
         self._toolbar_action = toolbar.addWidget(self.tool_button)
 
+        self.help_action = QAction("Help / Install MCP Server", self.iface.mainWindow())
+        self.help_action.triggered.connect(self._show_help)
+
         self.iface.addPluginToMenu("QGIS MCP", self.action)
+        self.iface.addPluginToMenu("QGIS MCP", self.help_action)
 
     def _green_logo_icon(self):
         """Load the green MCP logo for active state."""
         icon_path = os.path.join(os.path.dirname(__file__), "icons", "icon_active.png")
         return QIcon(icon_path)
+
+    def _show_help(self):
+        """Show help dialog with MCP server installation instructions."""
+        dlg = QDialog(self.iface.mainWindow())
+        dlg.setWindowTitle("QGIS MCP — Setup Guide")
+        dlg.setMinimumWidth(520)
+
+        layout = QVBoxLayout()
+        label = QLabel(
+            "<p>This plugin is only one half of the setup. You also need an "
+            "<b>MCP server</b> so that Claude (or another LLM) can talk to QGIS.</p>"
+            "<h3>Claude Code (one-liner)</h3>"
+            "<pre>claude mcp add --transport stdio qgis-mcp \\\n"
+            f"  -- uvx --from git+{self.REPO_URL} \\\n"
+            "  qgis-mcp-server</pre>"
+            "<h3>Claude Desktop</h3>"
+            "<p>Add to your MCP config "
+            "(<code>Settings &gt; Developer &gt; Edit Config</code>):</p>"
+            '<pre>{\n'
+            '  "mcpServers": {\n'
+            '    "qgis": {\n'
+            '      "command": "uvx",\n'
+            '      "args": [\n'
+            '        "--from",\n'
+            f'        "git+{self.REPO_URL}",\n'
+            '        "qgis-mcp-server"\n'
+            "      ]\n"
+            "    }\n"
+            "  }\n"
+            "}</pre>"
+            "<p>Requires <a href=\"https://docs.astral.sh/uv/\">uv</a> "
+            "to be installed.</p>"
+            "<p>Full instructions on the "
+            f'<a href="{self.REPO_URL}">GitHub repository</a>.</p>'
+        )
+        label.setWordWrap(True)
+        label.setOpenExternalLinks(True)
+        layout.addWidget(label)
+
+        btn_layout = QHBoxLayout()
+        github_btn = QToolButton()
+        github_btn.setText("Open GitHub")
+        github_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(self.REPO_URL))
+        )
+        btn_layout.addWidget(github_btn)
+        btn_layout.addStretch()
+        ok_btn = QToolButton()
+        ok_btn.setText("OK")
+        ok_btn.setMinimumWidth(80)
+        ok_btn.clicked.connect(dlg.accept)
+        btn_layout.addWidget(ok_btn)
+        layout.addLayout(btn_layout)
+
+        dlg.setLayout(layout)
+        dlg.exec()
 
     def toggle_server(self, checked):
         if checked:
@@ -1512,6 +1578,10 @@ class QgisMCPPlugin:
             self.action.triggered.disconnect(self.toggle_server)
             self.iface.removePluginMenu("QGIS MCP", self.action)
             self.action = None
+        if self.help_action:
+            self.help_action.triggered.disconnect(self._show_help)
+            self.iface.removePluginMenu("QGIS MCP", self.help_action)
+            self.help_action = None
         if self._toolbar_action:
             self.iface.pluginToolBar().removeAction(self._toolbar_action)
             self._toolbar_action = None
