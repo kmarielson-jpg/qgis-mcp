@@ -842,16 +842,15 @@ async def test_transform_coordinates_bbox(mock_connection):
 
 
 @pytest.mark.asyncio
-async def test_remove_layer_denied_without_elicitation(mock_connection):
-    """When elicitation not supported (raises), tool denies (fail-closed)."""
+async def test_remove_layer_proceeds_without_elicitation(mock_connection):
+    """When elicitation not supported (raises), tool proceeds (fail-open)."""
     mock_connection.send_command.return_value = {"status": "success", "result": {"ok": True}}
     from qgis_mcp.server import remove_layer
 
     ctx = _make_ctx(elicitation="unsupported")
     output = await remove_layer(ctx, layer_id="test_layer")
-    assert output["ok"] is False
-    assert "Cancelled" in output["message"]
-    mock_connection.send_command.assert_not_called()
+    assert output == {"ok": True}
+    mock_connection.send_command.assert_called_once()
 
 
 @pytest.mark.asyncio

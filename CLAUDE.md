@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-QGIS MCP (v0.1.1) connects QGIS to Claude AI through the Model Context Protocol (MCP), enabling Claude to directly control QGIS via socket-based communication.
+QGIS MCP (v0.1.3) connects QGIS to Claude AI through the Model Context Protocol (MCP), enabling Claude to directly control QGIS via socket-based communication.
 
 ## Architecture
 
@@ -126,7 +126,7 @@ uv run --no-sync pytest tests/ -v
 ## MCP Protocol Features
 
 - **MCP Logging**: Long-running tools (`execute_processing`, `render_map`, `execute_code`) and notable operations (`load_project`, `reload_plugin`) send `ctx.info()` status messages to the client.
-- **Elicitation**: Destructive tools (`remove_layer`, `delete_features`, `set_setting`) ask for user confirmation via `ctx.elicit()`. Falls back gracefully if the client doesn't support it.
+- **Elicitation**: Destructive tools (`remove_layer`, `delete_features`, `set_setting`, `execute_code`) ask for user confirmation via `ctx.elicit()`. Fail-open: proceeds if the client doesn't support elicitation (tools are already gated by `ToolAnnotations(destructiveHint=True)`).
 - **Completions**: `layer_id` arguments support auto-completion from available layers.
 - **Tool Titles**: All 50 tools have human-readable `title=` for better display in Claude Desktop / Cursor.
 - **Tool Annotations**: `readOnly`, `destructive`, `idempotent` hints via `ToolAnnotations`.

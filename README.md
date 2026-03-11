@@ -142,7 +142,7 @@ You have access to QGIS tools. Do the following:
 | **Plugins** | `list_plugins`, `get_plugin_info`, `reload_plugin` |
 | **System** | `ping`, `get_qgis_info`, `get_raster_info`, `get_message_log`, `execute_code`, `batch_commands`, `validate_expression`, `get_project_variables`, `set_project_variable`, `get_setting`, `set_setting`, `transform_coordinates` |
 
-All tools are async with human-readable titles and annotations (`readOnly`, `destructive`, `idempotent`). Destructive tools ask for confirmation via MCP elicitation. Long-running tools report progress via MCP logging.
+All tools are async with human-readable titles and annotations (`readOnly`, `destructive`, `idempotent`). Destructive tools ask for confirmation via MCP elicitation when supported; clients without elicitation proceed normally (fail-open) since tools are already gated by `ToolAnnotations`. Long-running tools report progress via MCP logging.
 
 ## Configuration
 
