@@ -4,8 +4,6 @@ Connect [QGIS](https://qgis.org/) to [Claude AI](https://claude.ai/) through the
 
 50 MCP tools covering layer management, feature editing, processing, rendering, styling, plugin development, and system management. Compatible with QGIS 3.28–4.x.
 
-Based on the [BlenderMCP](https://github.com/ahujasid/blender-mcp) project by [Siddharth Ahuja](https://x.com/sidahuj) and the original [qgis_mcp](https://github.com/jjsantos01/qgis_mcp) by [Juan Santos](https://x.com/jjsantoso).
-
 ## Architecture
 
 ```

@@ -18,7 +18,6 @@ about=Socket server plugin that exposes QGIS operations to LLMs through the
     - Non-blocking TCP socket server with length-prefixed framing
     - Toolbar button with port configuration dropdown
 
-    Based on the BlenderMCP project.
 version=0.1.0
 author=Nicolas Karasiak
 email=nicart@gmail.com
