@@ -88,10 +88,42 @@ def get_qgis_connection() -> QgisMCPClient:
 # ---------------------------------------------------------------------------
 
 
+def _invalidate_connection() -> None:
+    """Force-close the cached connection so the next call reconnects."""
+    global _qgis_connection, _connection_validated_at
+    if _qgis_connection is not None:
+        with contextlib.suppress(Exception):
+            _qgis_connection.disconnect()
+        _qgis_connection = None
+        _connection_validated_at = 0.0
+
+
+_CONNECTION_ERRORS = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, ConnectionError)
+
+
 def _send_sync(command_type: str, params: dict | None = None, timeout: int = 30) -> dict:
-    """Send a command synchronously and return the unwrapped result."""
+    """Send a command synchronously and return the unwrapped result.
+
+    Retries once on connection errors (broken pipe, reset) by reconnecting
+    to QGIS. This handles the common case where the cached connection went
+    stale (e.g. QGIS plugin restarted, idle TCP timeout).
+    """
     qgis = get_qgis_connection()
     result = qgis.send_command(command_type, params, timeout=timeout)
+
+    # Detect connection errors returned as error dicts by send_command
+    if result and result.get("status") == "error":
+        msg = result.get("message", "")
+        is_conn_error = any(
+            pattern in msg
+            for pattern in ("Broken pipe", "Connection reset", "Connection refused", "Connection closed")
+        )
+        if is_conn_error:
+            logger.warning("Connection error (%s), reconnecting and retrying", msg)
+            _invalidate_connection()
+            qgis = get_qgis_connection()
+            result = qgis.send_command(command_type, params, timeout=timeout)
+
     if not result or result.get("status") == "error":
         raise RuntimeError(result.get("message", "Command failed") if result else "No response")
     return result.get("result", {})
@@ -153,12 +185,9 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
             logger.warning(f"Could not connect to QGIS on startup: {e}")
         yield {}
     finally:
-        global _qgis_connection, _connection_validated_at
         if _qgis_connection:
             logger.info("Disconnecting from QGIS on shutdown")
-            _qgis_connection.disconnect()
-            _qgis_connection = None
-            _connection_validated_at = 0.0
+            _invalidate_connection()
         logger.info("QgisMCPServer shut down")
 
 
