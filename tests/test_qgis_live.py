@@ -1,60 +1,13 @@
-import json
-import socket
-import struct
+import os
+import sys
 import time
 import uuid
 
 import pytest
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-# --- Client Implementation (length-prefixed framing) ---
-class QgisMCPClient:
-    def __init__(self, host="localhost", port=9876):
-        self.host = host
-        self.port = port
-        self.socket = None
-
-    def connect(self):
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(5)
-            self.socket.connect((self.host, self.port))
-            return True
-        except Exception as e:
-            print(f"Connection failed: {e}")
-            return False
-
-    def disconnect(self):
-        if self.socket:
-            self.socket.close()
-            self.socket = None
-
-    def _recv_exact(self, n):
-        buf = bytearray()
-        while len(buf) < n:
-            chunk = self.socket.recv(min(n - len(buf), 65536))
-            if not chunk:
-                raise ConnectionError("Connection closed")
-            buf.extend(chunk)
-        return bytes(buf)
-
-    def send_command(self, command_type, params=None, timeout=30):
-        if not self.socket:
-            raise ConnectionError("Not connected to server")
-
-        command = {"type": command_type, "params": params or {}}
-        data = json.dumps(command).encode("utf-8")
-        header = struct.pack(">I", len(data))
-        self.socket.sendall(header + data)
-        self.socket.settimeout(timeout)
-
-        try:
-            resp_header = self._recv_exact(4)
-            resp_len = struct.unpack(">I", resp_header)[0]
-            resp_data = self._recv_exact(resp_len)
-            return json.loads(resp_data.decode("utf-8"))
-        except TimeoutError as e:
-            raise TimeoutError("Server response timed out") from e
+from qgis_mcp.client import QgisMCPClient
 
 
 # --- Fixtures ---

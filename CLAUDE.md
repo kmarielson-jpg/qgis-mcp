@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-QGIS MCP (v0.1.3) connects QGIS to Claude AI through the Model Context Protocol (MCP), enabling Claude to directly control QGIS via socket-based communication.
+QGIS MCP (v0.1.3) connects QGIS to Claude AI through the Model Context Protocol (MCP), enabling Claude to directly control QGIS via socket-based communication. Includes a multi-client installer (`install.py`) for easy setup.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ The system has two components that communicate over a TCP socket (default `local
 
 1. **QGIS Plugin** (`qgis_mcp_plugin/plugin.py`) — Runs inside QGIS (3.28–4.x). A `QgisMCPServer` class creates a non-blocking TCP socket server using a `QTimer` (25ms poll interval) to accept connections and process JSON commands within QGIS's event loop. Includes a `QgisMCPDockWidget` UI for start/stop control, and `QgisMCPPlugin` as the standard QGIS plugin entry point (`classFactory`). All command handlers live in this file. A companion `compat.py` module provides enum compatibility between QGIS 3.x and 4.x (see below).
 
-2. **MCP Server** (`src/qgis_mcp/server.py`) — Runs outside QGIS as a standalone Python process. Uses `FastMCP` from the `mcp` library to expose QGIS operations as MCP tools, resources, and prompts. A `_send()` helper unwraps the response envelope and raises on errors. All 50 tools are `async` with `title=` for human-readable names. Uses `ToolAnnotations` for read-only/destructive/idempotent hints. Long-running tools use `ctx.info()` for MCP logging. Destructive tools use `ctx.elicit()` for user confirmation (with graceful fallback).
+2. **MCP Server** (`src/qgis_mcp/server.py`) — Runs outside QGIS as a standalone Python process. Uses `FastMCP` from the `mcp` library to expose QGIS operations as MCP tools, resources, and prompts. A `_send()` helper unwraps the response envelope and raises on errors. All 51 tools are `async` with `title=` for human-readable names. Uses `ToolAnnotations` for read-only/destructive/idempotent hints. Long-running tools use `ctx.info()` for MCP logging. Destructive tools use `ctx.elicit()` for user confirmation (with graceful fallback). An optional compound tool mode (`src/qgis_mcp/compound_tools.py`) groups tools into ~19 compound tools for reduced schema overhead.
 
 **Data flow:** Claude → MCP Server (FastMCP) → TCP socket → QGIS Plugin (QTimer loop) → PyQGIS API → response back through socket.
 
@@ -29,6 +29,12 @@ QGIS_MCP_HOST=192.168.1.100 QGIS_MCP_PORT=9877 uv run --no-sync src/qgis_mcp/ser
 
 # Run with streamable HTTP transport (for remote/multi-client)
 QGIS_MCP_TRANSPORT=streamable-http uv run --no-sync src/qgis_mcp/server.py
+
+# Run with compound tool mode (reduces 51 tools to ~19 grouped tools)
+QGIS_MCP_TOOL_MODE=compound uv run --no-sync src/qgis_mcp/server.py
+
+# Run the multi-client installer (plugin symlink + MCP client config)
+python install.py
 
 # Run unit tests (no QGIS needed - mocked socket)
 uv run --no-sync pytest tests/test_mcp_tools.py -v
@@ -47,12 +53,16 @@ uv run --no-sync pytest tests/ -v
 | `QGIS_MCP_HOST` | `localhost` | Host for QGIS plugin socket connection |
 | `QGIS_MCP_PORT` | `9876` | Port for QGIS plugin socket connection |
 | `QGIS_MCP_TRANSPORT` | `stdio` | MCP transport: `stdio` or `streamable-http` |
+| `QGIS_MCP_LOG_FILE` | `~/.local/share/qgis-mcp/server.log` | Log file path (empty to disable file logging) |
+| `QGIS_MCP_LOG_LEVEL` | `INFO` | File log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `QGIS_MCP_TOOL_MODE` | `granular` | Tool registration mode: `granular` (51 tools) or `compound` (~19 grouped tools) |
 
-## MCP Tools (50 total)
+## MCP Tools (51 total)
 
 | Tool | Title | Annotations | Description |
 |---|---|---|---|
 | `ping` | Ping | readOnly | Check server connectivity |
+| `diagnose` | Diagnose | readOnly | Full stack health check: QGIS version, plugin/server version match, providers, clients |
 | `get_qgis_info` | Get QGIS Info | readOnly | QGIS version, profile, plugins |
 | `get_project_info` | Get Project Info | readOnly | Project metadata, CRS, layers |
 | `load_project` | Load Project | — | Load a .qgs/.qgz file |
@@ -128,9 +138,11 @@ uv run --no-sync pytest tests/ -v
 - **MCP Logging**: Long-running tools (`execute_processing`, `render_map`, `execute_code`) and notable operations (`load_project`, `reload_plugin`) send `ctx.info()` status messages to the client.
 - **Elicitation**: Destructive tools (`remove_layer`, `delete_features`, `set_setting`, `execute_code`) ask for user confirmation via `ctx.elicit()`. Fail-open: proceeds if the client doesn't support elicitation (tools are already gated by `ToolAnnotations(destructiveHint=True)`).
 - **Completions**: `layer_id` arguments support auto-completion from available layers.
-- **Tool Titles**: All 50 tools have human-readable `title=` for better display in Claude Desktop / Cursor.
+- **Tool Titles**: All 51 tools have human-readable `title=` for better display in Claude Desktop / Cursor.
 - **Tool Annotations**: `readOnly`, `destructive`, `idempotent` hints via `ToolAnnotations`.
 - **Streamable HTTP**: Set `QGIS_MCP_TRANSPORT=streamable-http` for remote/multi-client support.
+- **Compound Tool Mode**: Set `QGIS_MCP_TOOL_MODE=compound` to replace 51 granular tools with ~19 grouped tools, reducing schema overhead per LLM turn. Each compound tool takes an `action` parameter to select the operation.
+- **Structured File Logging**: Rotating file log (5MB x 3 backups) at `~/.local/share/qgis-mcp/server.log`. Console (stderr) only shows WARNING+. Configure via `QGIS_MCP_LOG_FILE` and `QGIS_MCP_LOG_LEVEL`.
 
 ## Key Details
 
@@ -140,7 +152,7 @@ uv run --no-sync pytest tests/ -v
 - **Dev dependencies**: `pytest>=7.0`, `pytest-asyncio>=0.23`
 - **Socket protocol**: Length-prefixed framing over TCP. Each message: 4-byte big-endian uint32 length header + JSON payload bytes. Client sends `{"type": "<command>", "params": {...}}`, server responds `{"status": "success"|"error", "result": ...}`.
 - **Connection management**: MCP server validates connection via `getpeername()`. Host/port configurable via `QGIS_MCP_HOST`/`QGIS_MCP_PORT` env vars. QGIS plugin supports up to 10 concurrent clients (e.g. multiple Claude Code instances each spawning their own MCP server process).
-- **All tools async**: Every tool function is `async def` to enable `await ctx.info()`, `ctx.elicit()`, etc. The `_send()` helper stays synchronous (blocking socket call — acceptable since responses are fast).
+- **All tools async**: Every tool function is `async def` to enable `await ctx.info()`, `ctx.elicit()`, etc. The `_send_sync()` helper stays synchronous (blocking socket call — acceptable since responses are fast).
 - **Feature format**: Flat dicts with `_fid` (feature ID) and attributes at top level. Geometry in `_geometry` key when requested.
 - **`get_layer_features` limit**: MCP tool caps at 50 features (default 10). Supports `expression` for server-side filtering.
 - **Batch support**: `batch` command type executes multiple commands in sequence, returns array of results.
@@ -162,4 +174,4 @@ The QGIS plugin repository rejects uploads if the version already exists, so alw
 
 ## Plugin Installation
 
-The `qgis_mcp_plugin/` folder must be copied or symlinked into the QGIS profile's `python/plugins/` directory. After QGIS restart, enable via Plugins menu.
+The easiest way is to run `python install.py` which symlinks the plugin and configures MCP clients automatically. Alternatively, manually copy or symlink `qgis_mcp_plugin/` into the QGIS profile's `python/plugins/` directory. After QGIS restart, enable via Plugins menu.
