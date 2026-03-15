@@ -1425,11 +1425,28 @@ class QgisMCPServer(QObject):
             "crs": layer.crs().authid(),
         }
 
+    @staticmethod
+    def _to_json_safe(val):
+        """Convert a QVariant / Qt value to a JSON-serializable Python type."""
+        if isinstance(val, QVariant):
+            if val.isNull():
+                return None
+            val = val.value()
+        # Qt date/time types → ISO string
+        if hasattr(val, "toString"):
+            try:
+                return val.toString(1)  # Qt.ISODate == 1
+            except Exception:
+                return str(val)
+        if isinstance(val, (str, int, float, bool, type(None))):
+            return val
+        return str(val)
+
     def get_project_variables(self, **kwargs):
         scope = QgsExpressionContextUtils.projectScope(QgsProject.instance())
         variables = {}
         for name in scope.variableNames():
-            variables[name] = scope.variable(name)
+            variables[name] = self._to_json_safe(scope.variable(name))
         return {"variables": variables}
 
     def set_project_variable(self, key, value, **kwargs):
@@ -1683,7 +1700,9 @@ class QgisMCPServer(QObject):
         bookmark.setName(name)
         bookmark.setGroup(group)
         bookmark.setExtent(extent)
-        bookmark_id = QgsProject.instance().bookmarkManager().addBookmark(bookmark)
+        result = QgsProject.instance().bookmarkManager().addBookmark(bookmark)
+        # addBookmark returns (id, success) tuple in QGIS 3.x+
+        bookmark_id = result[0] if isinstance(result, (list, tuple)) else result
         return {"ok": True, "id": bookmark_id, "name": name}
 
     def remove_bookmark(self, bookmark_id, **kwargs):
