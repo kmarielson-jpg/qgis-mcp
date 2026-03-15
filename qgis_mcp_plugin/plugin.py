@@ -85,13 +85,20 @@ from .compat import (
 )
 
 
+_DEFAULT_HOST = "localhost"
+_DEFAULT_PORT = 9876
+_RECV_CHUNK_SIZE = 65536
+_MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+_HEADER_STRUCT = struct.Struct(">I")
+
+
 class QgisMCPServer(QObject):
     """Server class to handle socket connections and execute QGIS commands"""
 
     LOG_TAG: ClassVar[str] = "MCP"
     MAX_CLIENTS: ClassVar[int] = 10
 
-    def __init__(self, host="localhost", port=9876, iface=None):
+    def __init__(self, host=_DEFAULT_HOST, port=_DEFAULT_PORT, iface=None):
         super().__init__()
         self.host = host
         self.port = port
@@ -158,7 +165,7 @@ class QgisMCPServer(QObject):
     def _send_response(self, client_sock, response):
         """Send a length-prefixed JSON response to a client."""
         resp_bytes = json.dumps(response).encode("utf-8")
-        header = struct.pack(">I", len(resp_bytes))
+        header = _HEADER_STRUCT.pack(len(resp_bytes))
         client_sock.sendall(header + resp_bytes)
 
     def process_server(self):
@@ -190,15 +197,15 @@ class QgisMCPServer(QObject):
             # Process each connected client
             for client_sock in list(self.clients):
                 try:
-                    data = client_sock.recv(65536)
+                    data = client_sock.recv(_RECV_CHUNK_SIZE)
                     if data:
                         buf = self.clients[client_sock] + data
-                        if len(buf) > 10 * 1024 * 1024:
+                        if len(buf) > _MAX_MESSAGE_SIZE:
                             raise ValueError("Buffer exceeded 10 MB limit")
                         # Process complete length-prefixed messages
                         while len(buf) >= 4:
-                            msg_len = struct.unpack(">I", buf[:4])[0]
-                            if msg_len > 10 * 1024 * 1024:  # 10 MB limit
+                            msg_len = _HEADER_STRUCT.unpack(buf[:4])[0]
+                            if msg_len > _MAX_MESSAGE_SIZE:
                                 raise ValueError(f"Message too large: {msg_len} bytes")
                             if len(buf) < 4 + msg_len:
                                 break  # Incomplete message
@@ -1768,13 +1775,13 @@ class QgisMCPPlugin:
         # Main action (used for menu entry + click handler)
         self.action = QAction(self._logo_icon(), "Run MCP", self.iface.mainWindow())
         self.action.setCheckable(True)
-        self.action.setToolTip("Start MCP server on port 9876")
+        self.action.setToolTip(f"Start MCP server on port {_DEFAULT_PORT}")
         self.action.triggered.connect(self.toggle_server)
 
         # Port config in dropdown menu
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1024, 65535)
-        self.port_spin.setValue(9876)
+        self.port_spin.setValue(_DEFAULT_PORT)
         self.port_spin.setPrefix("Port: ")
         self.port_spin.valueChanged.connect(self._save_port)
 
@@ -1823,7 +1830,7 @@ class QgisMCPPlugin:
         self.iface.addPluginToMenu("QGIS MCP", self.help_action)
 
         # Restore saved port
-        saved_port = settings.value(f"{self.SETTINGS_PREFIX}/port", 9876, type=int)
+        saved_port = settings.value(f"{self.SETTINGS_PREFIX}/port", _DEFAULT_PORT, type=int)
         self.port_spin.setValue(saved_port)
 
         # Auto-start if enabled

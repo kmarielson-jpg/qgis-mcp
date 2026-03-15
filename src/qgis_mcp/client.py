@@ -9,16 +9,21 @@ big-endian unsigned int indicating the JSON payload size in bytes.
 import json
 import logging
 import socket
-import struct
+
+from qgis_mcp.helpers import (
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    HEADER_STRUCT,
+    RECV_CHUNK_SIZE,
+    TIMEOUT_DEFAULT,
+    TIMEOUT_LONG,
+)
 
 logger = logging.getLogger("QgisMCPClient")
 
-# Pre-pack the struct format for header encoding/decoding.
-_HEADER_STRUCT = struct.Struct(">I")
-
 
 class QgisMCPClient:
-    def __init__(self, host="localhost", port=9876):
+    def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT):
         self.host = host
         self.port = port
         self.socket = None
@@ -60,7 +65,7 @@ class QgisMCPClient:
         view = memoryview(buf)
         pos = 0
         while pos < n:
-            nbytes = self.socket.recv_into(view[pos:], min(n - pos, 65536))
+            nbytes = self.socket.recv_into(view[pos:], min(n - pos, RECV_CHUNK_SIZE))
             if nbytes == 0:
                 raise ConnectionError("Connection closed")
             pos += nbytes
@@ -72,7 +77,7 @@ class QgisMCPClient:
             self.socket.settimeout(timeout)
             self._current_timeout = timeout
 
-    def send_command(self, command_type, params=None, timeout=30):
+    def send_command(self, command_type, params=None, timeout=TIMEOUT_DEFAULT):
         if not self.socket:
             raise ConnectionError("Not connected to server")
 
@@ -80,7 +85,7 @@ class QgisMCPClient:
 
         try:
             data = json.dumps(command).encode("utf-8")
-            header = _HEADER_STRUCT.pack(len(data))
+            header = HEADER_STRUCT.pack(len(data))
             # Two separate sendall() calls avoid allocating a header+data copy.
             # Benchmarks show this is ~2x faster for 1MB payloads (159us vs 312us)
             # and slightly faster even for small payloads. TCP_NODELAY ensures the
@@ -91,7 +96,7 @@ class QgisMCPClient:
             self._set_timeout(timeout)
 
             resp_header = self._recv_exact(4)
-            resp_len = _HEADER_STRUCT.unpack(resp_header)[0]
+            resp_len = HEADER_STRUCT.unpack(resp_header)[0]
             resp_data = self._recv_exact(resp_len)
 
             self._set_timeout(None)
@@ -118,7 +123,7 @@ class QgisMCPClient:
         return self.send_command("get_project_info")
 
     def execute_code(self, code):
-        return self.send_command("execute_code", {"code": code}, timeout=60)
+        return self.send_command("execute_code", {"code": code}, timeout=TIMEOUT_LONG)
 
     def add_vector_layer(self, path, name=None, provider="ogr"):
         params = {"path": path, "provider": provider}
@@ -182,7 +187,7 @@ class QgisMCPClient:
 
     def execute_processing(self, algorithm, parameters):
         return self.send_command(
-            "execute_processing", {"algorithm": algorithm, "parameters": parameters}, timeout=60
+            "execute_processing", {"algorithm": algorithm, "parameters": parameters}, timeout=TIMEOUT_LONG
         )
 
     def save_project(self, path=None):
@@ -198,10 +203,10 @@ class QgisMCPClient:
         params = {"width": width, "height": height}
         if path:
             params["path"] = path
-        return self.send_command("render_map_base64", params, timeout=60)
+        return self.send_command("render_map_base64", params, timeout=TIMEOUT_LONG)
 
     def batch(self, commands):
-        return self.send_command("batch", {"commands": commands}, timeout=60)
+        return self.send_command("batch", {"commands": commands}, timeout=TIMEOUT_LONG)
 
     # --- Phase 2 new convenience methods ---
 
@@ -358,7 +363,7 @@ def print_json(data):
 
 
 def main():
-    client = QgisMCPClient(host="localhost", port=9876)
+    client = QgisMCPClient()
     if not client.connect():
         logger.error("Could not connect to QGIS MCP server")
         return

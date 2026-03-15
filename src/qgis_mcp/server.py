@@ -28,6 +28,10 @@ from mcp.types import (
 from qgis_mcp.client import QgisMCPClient
 from qgis_mcp.helpers import (
     BATCH_BLOCKED_COMMANDS,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    TIMEOUT_DEFAULT,
+    TIMEOUT_LONG,
     enrich_diagnose,
     make_layer_response,
     make_project_response,
@@ -106,8 +110,8 @@ def get_qgis_connection() -> QgisMCPClient:
             _qgis_connection = None
             _connection_validated_at = 0.0
 
-    host = os.environ.get("QGIS_MCP_HOST", "localhost")
-    port_str = os.environ.get("QGIS_MCP_PORT", "9876")
+    host = os.environ.get("QGIS_MCP_HOST", DEFAULT_HOST)
+    port_str = os.environ.get("QGIS_MCP_PORT", str(DEFAULT_PORT))
     try:
         port = int(port_str)
         if not 1 <= port <= 65535:
@@ -147,7 +151,7 @@ _FIRST_CONNECT_DELAYS = (1.0, 2.0, 3.0, 5.0)  # escalating backoff
 _first_successful_connection = False
 
 
-def _send_sync(command_type: str, params: dict | None = None, timeout: int = 30) -> dict:
+def _send_sync(command_type: str, params: dict | None = None, timeout: int = TIMEOUT_DEFAULT) -> dict:
     """Send a command synchronously and return the unwrapped result.
 
     Retries on connection/socket errors with increasing delays. Uses a more
@@ -246,8 +250,8 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     The first tool call triggers connection via _send_sync()'s retry loop,
     which is more robust (handles QGIS still starting, plugin not yet enabled).
     """
-    host = os.environ.get("QGIS_MCP_HOST", "localhost")
-    port = os.environ.get("QGIS_MCP_PORT", "9876")
+    host = os.environ.get("QGIS_MCP_HOST", DEFAULT_HOST)
+    port = os.environ.get("QGIS_MCP_PORT", str(DEFAULT_PORT))
     logger.info(f"QgisMCPServer starting up (will connect to QGIS at {host}:{port} on first call)")
     try:
         yield {}
@@ -682,7 +686,7 @@ async def execute_processing(ctx: Context, algorithm: str, parameters: dict) -> 
     await ctx.info(f"Running algorithm: {algorithm}")
     await ctx.report_progress(0, 100)
     result = await _send(
-        "execute_processing", {"algorithm": algorithm, "parameters": parameters}, timeout=60
+        "execute_processing", {"algorithm": algorithm, "parameters": parameters}, timeout=TIMEOUT_LONG
     )
     await ctx.report_progress(100, 100)
     return result
@@ -736,7 +740,7 @@ async def render_map(
     params = {"width": width, "height": height}
     if path:
         params["path"] = path
-    result = await _send("render_map_base64", params, timeout=60)
+    result = await _send("render_map_base64", params, timeout=TIMEOUT_LONG)
     await ctx.report_progress(100, 100)
 
     return make_render_response(result, width, height, path)
@@ -758,7 +762,7 @@ async def execute_code(ctx: Context, code: str) -> dict:
         return {"ok": False, "message": "Cancelled by user"}
     await ctx.info("Executing PyQGIS code...")
     await ctx.report_progress(0, 100)
-    result = await _send("execute_code", {"code": code}, timeout=60)
+    result = await _send("execute_code", {"code": code}, timeout=TIMEOUT_LONG)
     await ctx.report_progress(100, 100)
     return result
 
@@ -980,7 +984,7 @@ async def batch_commands(ctx: Context, commands: list[dict]) -> dict:
                 f"Command {cmd_type!r} is not allowed in batch — "
                 "call it individually so confirmation can be requested"
             )
-    return await _send("batch", {"commands": commands}, timeout=60)
+    return await _send("batch", {"commands": commands}, timeout=TIMEOUT_LONG)
 
 
 # --- Print Layouts ---

@@ -5,8 +5,21 @@ Imports only from ``mcp`` and stdlib — no circular-import risk.
 
 import importlib.metadata
 import json
+import struct
 
 from mcp.types import Annotations, ImageContent, ResourceLink, TextContent
+
+# ---------------------------------------------------------------------------
+# Protocol constants — single source of truth for defaults across all modules
+# ---------------------------------------------------------------------------
+
+DEFAULT_HOST = "localhost"
+DEFAULT_PORT = 9876
+TIMEOUT_DEFAULT = 30  # seconds — most tool commands
+TIMEOUT_LONG = 60  # seconds — execute_processing, render_map, execute_code, batch
+RECV_CHUNK_SIZE = 65536  # bytes per recv/recv_into call
+MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB — plugin-side buffer/message limit
+HEADER_STRUCT = struct.Struct(">I")  # 4-byte big-endian uint32 length prefix
 
 BATCH_BLOCKED_COMMANDS = frozenset(
     {

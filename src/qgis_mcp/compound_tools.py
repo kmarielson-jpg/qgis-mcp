@@ -15,6 +15,7 @@ from mcp.types import Annotations, ImageContent, ToolAnnotations
 
 from qgis_mcp.helpers import (
     BATCH_BLOCKED_COMMANDS,
+    TIMEOUT_LONG,
     enrich_diagnose,
     make_layer_response,
     make_project_response,
@@ -412,7 +413,7 @@ def register_compound_tools(mcp: FastMCP, _send, _confirm_destructive):
             path = kwargs.get("path")
             if path:
                 params["path"] = path
-            result = await _send("render_map_base64", params, timeout=60)
+            result = await _send("render_map_base64", params, timeout=TIMEOUT_LONG)
             await ctx.report_progress(100, 100)
             return make_render_response(result, params["width"], params["height"], path)
         elif action == "export_layout":
@@ -451,7 +452,7 @@ def register_compound_tools(mcp: FastMCP, _send, _confirm_destructive):
             result = await _send(
                 "execute_processing",
                 {"algorithm": kwargs["algorithm"], "parameters": kwargs["parameters"]},
-                timeout=60,
+                timeout=TIMEOUT_LONG,
             )
             await ctx.report_progress(100, 100)
             return result
@@ -488,7 +489,7 @@ def register_compound_tools(mcp: FastMCP, _send, _confirm_destructive):
                 return {"ok": False, "message": "Cancelled by user"}
             await ctx.info("Executing PyQGIS code...")
             await ctx.report_progress(0, 100)
-            result = await _send("execute_code", {"code": kwargs["code"]}, timeout=60)
+            result = await _send("execute_code", {"code": kwargs["code"]}, timeout=TIMEOUT_LONG)
             await ctx.report_progress(100, 100)
             return result
         else:
@@ -518,7 +519,7 @@ def register_compound_tools(mcp: FastMCP, _send, _confirm_destructive):
                         f"Command {cmd_type!r} is not allowed in batch — "
                         "call it individually so confirmation can be requested"
                     )
-            return await _send("batch", {"commands": commands}, timeout=60)
+            return await _send("batch", {"commands": commands}, timeout=TIMEOUT_LONG)
         else:
             raise ValueError(f"Unknown batch action: {action}")
 
