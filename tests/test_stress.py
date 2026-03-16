@@ -9,92 +9,14 @@ Usage:
     uv run --no-sync pytest tests/test_stress.py -v
 """
 
-import os
-import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from qgis_mcp.client import QgisMCPClient
+from conftest import make_client
 from qgis_mcp.helpers import TIMEOUT_LONG
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-CITIES = [
-    {"attributes": {"name": "Paris", "population": 2161000, "country": "France"}, "geometry_wkt": "POINT(2.35 48.86)"},
-    {"attributes": {"name": "Berlin", "population": 3645000, "country": "Germany"}, "geometry_wkt": "POINT(13.40 52.52)"},
-    {"attributes": {"name": "London", "population": 8982000, "country": "UK"}, "geometry_wkt": "POINT(-0.12 51.51)"},
-    {"attributes": {"name": "Madrid", "population": 3223000, "country": "Spain"}, "geometry_wkt": "POINT(-3.70 40.42)"},
-    {"attributes": {"name": "Rome", "population": 2873000, "country": "Italy"}, "geometry_wkt": "POINT(12.50 41.90)"},
-    {"attributes": {"name": "Tokyo", "population": 13960000, "country": "Japan"}, "geometry_wkt": "POINT(139.69 35.69)"},
-    {"attributes": {"name": "New York", "population": 8336000, "country": "USA"}, "geometry_wkt": "POINT(-74.01 40.71)"},
-    {"attributes": {"name": "São Paulo", "population": 12330000, "country": "Brazil"}, "geometry_wkt": "POINT(-46.63 -23.55)"},
-    {"attributes": {"name": "Mumbai", "population": 12440000, "country": "India"}, "geometry_wkt": "POINT(72.88 19.08)"},
-    {"attributes": {"name": "Cairo", "population": 9540000, "country": "Egypt"}, "geometry_wkt": "POINT(31.24 30.04)"},
-    {"attributes": {"name": "Sydney", "population": 5312000, "country": "Australia"}, "geometry_wkt": "POINT(151.21 -33.87)"},
-    {"attributes": {"name": "Lagos", "population": 15400000, "country": "Nigeria"}, "geometry_wkt": "POINT(3.39 6.52)"},
-    {"attributes": {"name": "Moscow", "population": 12500000, "country": "Russia"}, "geometry_wkt": "POINT(37.62 55.76)"},
-    {"attributes": {"name": "Beijing", "population": 21540000, "country": "China"}, "geometry_wkt": "POINT(116.40 39.90)"},
-    {"attributes": {"name": "Mexico City", "population": 9210000, "country": "Mexico"}, "geometry_wkt": "POINT(-99.13 19.43)"},
-    {"attributes": {"name": "Toronto", "population": 2930000, "country": "Canada"}, "geometry_wkt": "POINT(-79.38 43.65)"},
-    {"attributes": {"name": "Nairobi", "population": 4397000, "country": "Kenya"}, "geometry_wkt": "POINT(36.82 -1.29)"},
-    {"attributes": {"name": "Buenos Aires", "population": 3076000, "country": "Argentina"}, "geometry_wkt": "POINT(-58.38 -34.60)"},
-    {"attributes": {"name": "Bangkok", "population": 10540000, "country": "Thailand"}, "geometry_wkt": "POINT(100.50 13.76)"},
-    {"attributes": {"name": "Istanbul", "population": 15460000, "country": "Turkey"}, "geometry_wkt": "POINT(28.98 41.01)"},
-]
-
-
-@pytest.fixture(scope="module")
-def client():
-    c = QgisMCPClient()
-    if not c.connect():
-        pytest.skip("QGIS MCP Server is not running on localhost:9876")
-    yield c
-    c.disconnect()
-
-
-@pytest.fixture(scope="module")
-def stress_project(client):
-    """Create a fresh project for the stress test suite."""
-    path = f"/tmp/mcp_stress_{uuid.uuid4().hex[:8]}.qgz"
-    resp = client.send_command("create_new_project", {"path": path})
-    assert resp["status"] == "success"
-    yield path
-    # No cleanup needed — temp file
-
-
-@pytest.fixture(scope="module")
-def cities_layer(client, stress_project):
-    """Create a memory layer with 20 world cities."""
-    resp = client.send_command(
-        "create_memory_layer",
-        {
-            "name": f"stress_cities_{uuid.uuid4().hex[:6]}",
-            "geometry_type": "Point",
-            "crs": "EPSG:4326",
-            "fields": [
-                {"name": "name", "type": "string"},
-                {"name": "population", "type": "integer"},
-                {"name": "country", "type": "string"},
-            ],
-        },
-    )
-    assert resp["status"] == "success"
-    layer_id = resp["result"]["id"]
-
-    resp = client.send_command("add_features", {"layer_id": layer_id, "features": CITIES})
-    assert resp["status"] == "success"
-    assert resp["result"]["added"] == 20
-
-    yield layer_id
-
-    client.send_command("remove_layer", {"layer_id": layer_id})
 
 
 # ---------------------------------------------------------------------------
@@ -130,18 +52,18 @@ class TestSystem:
 
 
 class TestProject:
-    def test_get_project_info(self, client, stress_project):
+    def test_get_project_info(self, client, test_project):
         resp = client.send_command("get_project_info")
         assert resp["status"] == "success"
         assert "crs" in resp["result"]
         assert "layer_count" in resp["result"]
 
-    def test_save_project(self, client, stress_project):
+    def test_save_project(self, client, test_project):
         resp = client.send_command("save_project")
         assert resp["status"] == "success"
         assert "saved" in resp["result"]
 
-    def test_set_and_get_project_variable(self, client, stress_project):
+    def test_set_and_get_project_variable(self, client, test_project):
         resp = client.send_command("set_project_variable", {"key": "stress_run", "value": "yes"})
         assert resp["status"] == "success"
 
@@ -149,7 +71,7 @@ class TestProject:
         assert resp["status"] == "success"
         assert resp["result"]["variables"]["stress_run"] == "yes"
 
-    def test_project_variables_serializable(self, client, stress_project):
+    def test_project_variables_serializable(self, client, test_project):
         """Regression: QVariant/QDateTime must be JSON-serializable."""
         resp = client.send_command("get_project_variables")
         assert resp["status"] == "success"
@@ -178,7 +100,7 @@ class TestLayers:
         assert resp["result"]["total_count"] >= 1
 
     def test_find_layer(self, client, cities_layer):
-        resp = client.send_command("find_layer", {"name_pattern": "stress_cities*"})
+        resp = client.send_command("find_layer", {"name_pattern": "test_cities*"})
         assert resp["status"] == "success"
         assert resp["result"]["count"] >= 1
 
@@ -497,7 +419,7 @@ class TestLayerTree:
 
 
 class TestBookmarks:
-    def test_add_get_remove_bookmark(self, client, stress_project):
+    def test_add_get_remove_bookmark(self, client, test_project):
         name = f"stress_bm_{uuid.uuid4().hex[:6]}"
         resp = client.send_command(
             "add_bookmark", {"name": name, "xmin": -10, "ymin": 35, "xmax": 40, "ymax": 60}
@@ -727,19 +649,12 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 
 
-def _make_client():
-    """Create and connect a fresh QgisMCPClient."""
-    c = QgisMCPClient()
-    assert c.connect(), "Failed to connect"
-    return c
-
-
 class TestConcurrentClients:
     """Multiple TCP connections hitting the plugin simultaneously."""
 
     def test_two_clients_interleaved(self, client, cities_layer):
         """Two clients sending commands in alternation."""
-        c2 = _make_client()
+        c2 = make_client()
         try:
             r1 = client.send_command("ping")
             r2 = c2.send_command("ping")
@@ -758,7 +673,7 @@ class TestConcurrentClients:
     def test_five_concurrent_pings(self):
         """Five clients each sending a ping in parallel threads."""
         def ping_once():
-            c = _make_client()
+            c = make_client()
             try:
                 return c.send_command("ping")
             finally:
@@ -774,7 +689,7 @@ class TestConcurrentClients:
     def test_concurrent_reads(self, cities_layer):
         """Five clients reading features simultaneously."""
         def read_features():
-            c = _make_client()
+            c = make_client()
             try:
                 return c.send_command(
                     "get_layer_features",
@@ -793,21 +708,21 @@ class TestConcurrentClients:
     def test_concurrent_mixed_operations(self, cities_layer):
         """Parallel clients doing different operations (reads + canvas + stats)."""
         def op_features():
-            c = _make_client()
+            c = make_client()
             try:
                 return c.send_command("get_layer_features", {"layer_id": cities_layer, "limit": 10})
             finally:
                 c.disconnect()
 
         def op_extent():
-            c = _make_client()
+            c = make_client()
             try:
                 return c.send_command("get_canvas_extent")
             finally:
                 c.disconnect()
 
         def op_stats():
-            c = _make_client()
+            c = make_client()
             try:
                 return c.send_command("get_field_statistics", {"layer_id": cities_layer, "field_name": "population"})
             finally:
@@ -826,7 +741,7 @@ class TestConcurrentClients:
         r1 = client.send_command("ping")
         assert r1["status"] == "success"
 
-        c2 = _make_client()
+        c2 = make_client()
         c2.send_command("ping")
         c2.disconnect()
 
@@ -859,7 +774,7 @@ class TestHeavyLoad:
         # Should complete well within 30s on loopback
         assert elapsed < 30, f"200 commands took {elapsed:.1f}s — too slow"
 
-    def test_bulk_feature_insert_and_delete(self, client, stress_project):
+    def test_bulk_feature_insert_and_delete(self, client, test_project):
         """Insert 500 features, verify, then delete them all."""
         layer_name = f"bulk_{uuid.uuid4().hex[:6]}"
         resp = client.send_command(
@@ -935,7 +850,7 @@ class TestHeavyLoad:
         assert len(resp["result"]) == 20
         assert all(r["status"] == "success" for r in resp["result"])
 
-    def test_concurrent_writes_different_layers(self, client, stress_project):
+    def test_concurrent_writes_different_layers(self, client, test_project):
         """Two clients writing to different layers simultaneously."""
         layers = []
         for i in range(2):
@@ -952,7 +867,7 @@ class TestHeavyLoad:
             layers.append(resp["result"]["id"])
 
         def write_to_layer(layer_id, start):
-            c = _make_client()
+            c = make_client()
             try:
                 features = [
                     {"attributes": {"val": j}, "geometry_wkt": f"POINT({j} {j})"}
@@ -977,7 +892,7 @@ class TestHeavyLoad:
 
     def test_reconnect_after_close(self):
         """Client can reconnect after disconnect and resume operations."""
-        c = _make_client()
+        c = make_client()
         r = c.send_command("ping")
         assert r["status"] == "success"
         c.disconnect()
@@ -990,7 +905,7 @@ class TestHeavyLoad:
     def test_ten_connect_disconnect_cycles(self):
         """Rapid connect/disconnect — plugin should handle without leaking."""
         for _ in range(10):
-            c = _make_client()
+            c = make_client()
             r = c.send_command("ping")
             assert r["status"] == "success"
             c.disconnect()
