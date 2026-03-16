@@ -19,7 +19,7 @@ about=Socket server plugin that exposes QGIS operations to LLMs through the
     - Non-blocking TCP socket server with length-prefixed framing
     - Toolbar button with port configuration dropdown
 
-version=0.2.0
+version=0.2.1
 author=Nicolas Karasiak
 email=nicart@gmail.com
 tags=mcp,ai,claude,llm,automation,socket,remote
@@ -31,7 +31,10 @@ category=Plugins
 icon=icons/icon.png
 experimental=False
 deprecated=False
-changelog=0.2.0 : Add 16 new tools (labeling, bookmarks, themes, CRS, active layer, canvas scale),
+changelog=0.2.1 : Fix installer auto-setup deps (pip fallback for Windows),
+    QGIS 4.0 compat (tree node truthiness, message log signal),
+    113 integration tests (TDD + stress + concurrency)
+    0.2.0 : Add 16 new tools (labeling, bookmarks, themes, CRS, active layer, canvas scale),
     shared helpers module, protocol constants consolidation, connection retry with backoff,
     multi-client installer, compound tool mode, structured file logging,
     fix QVariant/QDateTime serialization in project variables, fix bookmark id tuple unwrap,
