@@ -11,7 +11,9 @@ Usage:
 
 import os
 import sys
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
@@ -718,3 +720,277 @@ class TestEdgeCases:
         # Next command should work fine
         resp = client.send_command("ping")
         assert resp["status"] == "success"
+
+
+# ---------------------------------------------------------------------------
+# 17. Concurrent clients
+# ---------------------------------------------------------------------------
+
+
+def _make_client():
+    """Create and connect a fresh QgisMCPClient."""
+    c = QgisMCPClient()
+    assert c.connect(), "Failed to connect"
+    return c
+
+
+class TestConcurrentClients:
+    """Multiple TCP connections hitting the plugin simultaneously."""
+
+    def test_two_clients_interleaved(self, client, cities_layer):
+        """Two clients sending commands in alternation."""
+        c2 = _make_client()
+        try:
+            r1 = client.send_command("ping")
+            r2 = c2.send_command("ping")
+            assert r1["status"] == "success"
+            assert r2["status"] == "success"
+
+            r1 = client.send_command("get_layer_features", {"layer_id": cities_layer, "limit": 5})
+            r2 = c2.send_command("get_layer_features", {"layer_id": cities_layer, "limit": 5})
+            assert r1["status"] == "success"
+            assert r2["status"] == "success"
+            assert len(r1["result"]["features"]) == 5
+            assert len(r2["result"]["features"]) == 5
+        finally:
+            c2.disconnect()
+
+    def test_five_concurrent_pings(self):
+        """Five clients each sending a ping in parallel threads."""
+        def ping_once():
+            c = _make_client()
+            try:
+                return c.send_command("ping")
+            finally:
+                c.disconnect()
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(ping_once) for _ in range(5)]
+            results = [f.result() for f in as_completed(futures)]
+
+        assert len(results) == 5
+        assert all(r["status"] == "success" for r in results)
+
+    def test_concurrent_reads(self, cities_layer):
+        """Five clients reading features simultaneously."""
+        def read_features():
+            c = _make_client()
+            try:
+                return c.send_command(
+                    "get_layer_features",
+                    {"layer_id": cities_layer, "limit": 20},
+                )
+            finally:
+                c.disconnect()
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(read_features) for _ in range(5)]
+            results = [f.result() for f in as_completed(futures)]
+
+        assert all(r["status"] == "success" for r in results)
+        assert all(len(r["result"]["features"]) == 20 for r in results)
+
+    def test_concurrent_mixed_operations(self, cities_layer):
+        """Parallel clients doing different operations (reads + canvas + stats)."""
+        def op_features():
+            c = _make_client()
+            try:
+                return c.send_command("get_layer_features", {"layer_id": cities_layer, "limit": 10})
+            finally:
+                c.disconnect()
+
+        def op_extent():
+            c = _make_client()
+            try:
+                return c.send_command("get_canvas_extent")
+            finally:
+                c.disconnect()
+
+        def op_stats():
+            c = _make_client()
+            try:
+                return c.send_command("get_field_statistics", {"layer_id": cities_layer, "field_name": "population"})
+            finally:
+                c.disconnect()
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futures = []
+            for op in [op_features, op_extent, op_stats] * 2:
+                futures.append(pool.submit(op))
+            results = [f.result() for f in as_completed(futures)]
+
+        assert all(r["status"] == "success" for r in results)
+
+    def test_client_disconnect_no_impact(self, client):
+        """A second client connecting and disconnecting shouldn't affect the first."""
+        r1 = client.send_command("ping")
+        assert r1["status"] == "success"
+
+        c2 = _make_client()
+        c2.send_command("ping")
+        c2.disconnect()
+
+        r2 = client.send_command("ping")
+        assert r2["status"] == "success"
+
+
+# ---------------------------------------------------------------------------
+# 18. Heavy load
+# ---------------------------------------------------------------------------
+
+
+class TestHeavyLoad:
+    """Sustained throughput and large data volume tests."""
+
+    def test_200_sequential_commands(self, client, cities_layer):
+        """200 commands on a single connection — throughput and stability."""
+        t0 = time.perf_counter()
+        for i in range(200):
+            if i % 3 == 0:
+                resp = client.send_command("ping")
+            elif i % 3 == 1:
+                resp = client.send_command("get_canvas_extent")
+            else:
+                resp = client.send_command(
+                    "get_layer_features", {"layer_id": cities_layer, "limit": 1}
+                )
+            assert resp["status"] == "success", f"Failed at iteration {i}: {resp}"
+        elapsed = time.perf_counter() - t0
+        # Should complete well within 30s on loopback
+        assert elapsed < 30, f"200 commands took {elapsed:.1f}s — too slow"
+
+    def test_bulk_feature_insert_and_delete(self, client, stress_project):
+        """Insert 500 features, verify, then delete them all."""
+        layer_name = f"bulk_{uuid.uuid4().hex[:6]}"
+        resp = client.send_command(
+            "create_memory_layer",
+            {
+                "name": layer_name,
+                "geometry_type": "Point",
+                "crs": "EPSG:4326",
+                "fields": [{"name": "idx", "type": "integer"}],
+            },
+        )
+        assert resp["status"] == "success"
+        layer_id = resp["result"]["id"]
+
+        # Insert in batches of 100
+        total = 500
+        batch_size = 100
+        for start in range(0, total, batch_size):
+            batch = [
+                {
+                    "attributes": {"idx": i},
+                    "geometry_wkt": f"POINT({(i % 360) - 180} {(i % 180) - 90})",
+                }
+                for i in range(start, min(start + batch_size, total))
+            ]
+            resp = client.send_command("add_features", {"layer_id": layer_id, "features": batch})
+            assert resp["status"] == "success"
+            assert resp["result"]["added"] == len(batch)
+
+        # Verify count
+        resp = client.send_command(
+            "get_field_statistics", {"layer_id": layer_id, "field_name": "idx"}
+        )
+        assert resp["status"] == "success"
+        assert resp["result"]["count"] == total
+
+        # Delete all
+        resp = client.send_command(
+            "delete_features", {"layer_id": layer_id, "expression": "TRUE"}
+        )
+        assert resp["status"] == "success"
+        assert resp["result"]["deleted"] == total
+
+        client.send_command("remove_layer", {"layer_id": layer_id})
+
+    def test_large_response_payload(self, client, cities_layer):
+        """Request all features with geometry to produce a larger response."""
+        resp = client.send_command(
+            "get_layer_features",
+            {"layer_id": cities_layer, "limit": 50, "include_geometry": True},
+        )
+        assert resp["status"] == "success"
+        features = resp["result"]["features"]
+        assert len(features) == 20
+        assert all("_geometry" in f for f in features)
+
+    def test_batch_20_commands(self, client, cities_layer):
+        """Batch with 20 mixed commands in a single round-trip."""
+        commands = []
+        for i in range(20):
+            if i % 4 == 0:
+                commands.append({"type": "ping", "params": {}})
+            elif i % 4 == 1:
+                commands.append({"type": "get_canvas_extent", "params": {}})
+            elif i % 4 == 2:
+                commands.append({"type": "get_project_variables", "params": {}})
+            else:
+                commands.append(
+                    {"type": "get_layer_features", "params": {"layer_id": cities_layer, "limit": 5}}
+                )
+        resp = client.send_command("batch", {"commands": commands}, timeout=TIMEOUT_LONG)
+        assert resp["status"] == "success"
+        assert len(resp["result"]) == 20
+        assert all(r["status"] == "success" for r in resp["result"])
+
+    def test_concurrent_writes_different_layers(self, client, stress_project):
+        """Two clients writing to different layers simultaneously."""
+        layers = []
+        for i in range(2):
+            resp = client.send_command(
+                "create_memory_layer",
+                {
+                    "name": f"write_test_{i}_{uuid.uuid4().hex[:4]}",
+                    "geometry_type": "Point",
+                    "crs": "EPSG:4326",
+                    "fields": [{"name": "val", "type": "integer"}],
+                },
+            )
+            assert resp["status"] == "success"
+            layers.append(resp["result"]["id"])
+
+        def write_to_layer(layer_id, start):
+            c = _make_client()
+            try:
+                features = [
+                    {"attributes": {"val": j}, "geometry_wkt": f"POINT({j} {j})"}
+                    for j in range(start, start + 50)
+                ]
+                return c.send_command("add_features", {"layer_id": layer_id, "features": features})
+            finally:
+                c.disconnect()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f1 = pool.submit(write_to_layer, layers[0], 0)
+            f2 = pool.submit(write_to_layer, layers[1], 100)
+            r1, r2 = f1.result(), f2.result()
+
+        assert r1["status"] == "success"
+        assert r1["result"]["added"] == 50
+        assert r2["status"] == "success"
+        assert r2["result"]["added"] == 50
+
+        for lid in layers:
+            client.send_command("remove_layer", {"layer_id": lid})
+
+    def test_reconnect_after_close(self):
+        """Client can reconnect after disconnect and resume operations."""
+        c = _make_client()
+        r = c.send_command("ping")
+        assert r["status"] == "success"
+        c.disconnect()
+
+        assert c.connect()
+        r = c.send_command("ping")
+        assert r["status"] == "success"
+        c.disconnect()
+
+    def test_ten_connect_disconnect_cycles(self):
+        """Rapid connect/disconnect — plugin should handle without leaking."""
+        for _ in range(10):
+            c = _make_client()
+            r = c.send_command("ping")
+            assert r["status"] == "success"
+            c.disconnect()
